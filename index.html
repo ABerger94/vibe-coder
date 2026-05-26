@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vibe Coder</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f7f5;
+    --bg3: #f0ede8;
+    --text: #1a1a1a;
+    --text2: #666;
+    --text3: #999;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --blue-mid: #378ADD;
+    --green: #639922;
+    --green-light: #EAF3DE;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --bg2: #222;
+      --bg3: #2a2a2a;
+      --text: #f0f0f0;
+      --text2: #aaa;
+      --text3: #666;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --blue-light: #0d2a45;
+      --green-light: #1a2e0a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }
+
+  /* ── LOCK SCREEN ─────────────────────────────────────── */
+  #lock-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 1rem;
+  }
+  .lock-card {
+    width: 100%; max-width: 400px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-lg);
+    padding: 2rem; display: flex; flex-direction: column; gap: 1.25rem;
+  }
+  .lock-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .lock-logo-icon { width: 36px; height: 36px; border-radius: 9px; background: var(--blue-light); display: flex; align-items: center; justify-content: center; }
+  .lock-title { font-size: 20px; font-weight: 600; }
+  .lock-sub { font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .lock-field { display: flex; flex-direction: column; gap: 5px; }
+  .lock-label { font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
+  .lock-input { width: 100%; padding: 10px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; transition: border-color .15s; }
+  .lock-input:focus { outline: none; border-color: var(--blue-mid); }
+  .lock-hint { font-size: 11px; color: var(--text3); line-height: 1.5; }
+  .lock-hint a { color: var(--blue); text-decoration: none; }
+  .lock-hint a:hover { text-decoration: underline; }
+  .lock-btn { width: 100%; padding: 11px; border-radius: var(--radius-lg); border: none; background: var(--blue); color: white; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background .15s; }
+  .lock-btn:hover { background: #0C447C; }
+  .lock-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .lock-err { font-size: 12px; color: #E24B4A; background: #FCEBEB; padding: 8px 12px; border-radius: var(--radius); border: 0.5px solid #F09595; display: none; }
+  .lock-err.show { display: block; }
+  .lock-divider { display: flex; align-items: center; gap: 10px; color: var(--text3); font-size: 11px; }
+  .lock-divider::before, .lock-divider::after { content:''; flex:1; height:0.5px; background:var(--border); }
+  .lock-pass-section { display: flex; flex-direction: column; gap: 8px; }
+  .lock-pass-note { font-size: 11px; color: var(--text3); line-height: 1.5; }
+
+  /* ── APP ─────────────────────────────────────────────── */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .tl { display: flex; align-items: center; gap: 9px; }
+  .logo { width: 24px; height: 24px; border-radius: 6px; background: var(--blue-light); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .app-name { font-size: 14px; font-weight: 500; }
+  .tr { display: flex; align-items: center; gap: 7px; }
+  .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); transition: all .3s; flex-shrink: 0; }
+  .sdot.live { background: #639922; animation: blink 1.4s infinite; }
+  .sdot.thinking { background: var(--blue-mid); animation: blink .8s infinite; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
+  .stxt { font-size: 11px; color: var(--text3); }
+  .tb-btn { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: var(--radius); border: 0.5px solid var(--border); font-size: 11px; cursor: pointer; background: var(--bg); color: var(--text2); transition: all .15s; }
+  .tb-btn:hover { border-color: var(--border2); color: var(--text); }
+  .tb-btn.on { background: var(--green-light); border-color: #97C459; color: #27500A; }
+  .tb-btn.danger { color: #E24B4A; border-color: #F09595; }
+  .tb-btn.danger:hover { background: #FCEBEB; }
+
+  .tabs { display: flex; border-bottom: 0.5px solid var(--border); padding: 0 14px; gap: 2px; flex-shrink: 0; }
+  .tab { padding: 7px 12px; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text2); transition: all .15s; display: flex; align-items: center; gap: 5px; margin-bottom: -0.5px; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+  .tbadge { background: var(--bg2); border-radius: 10px; padding: 1px 5px; font-size: 10px; color: var(--text3); }
+  .tab.active .tbadge { background: var(--blue-light); color: var(--blue); }
+
+  .view { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+  .view.active { display: flex; }
+
+  /* CHAT LAYOUT */
+  .chat-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+  .crew-panel { width: 160px; border-right: 0.5px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+  .crew-hdr { padding: 8px 12px; font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .crew-list { flex: 1; overflow-y: auto; }
+  .agent-row { padding: 8px 10px; display: flex; align-items: center; gap: 7px; border-bottom: 0.5px solid var(--border); }
+  .agent-row.hl { background: var(--blue-light); }
+  .a-av { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; position: relative; }
+  .a-ring { position: absolute; inset: -2px; border-radius: 50%; border: 1.5px solid var(--blue-mid); animation: rot .9s linear infinite; display: none; }
+  @keyframes rot { to{transform:rotate(360deg)} }
+  .a-av.thinking .a-ring { display: block; }
+  .a-info { flex: 1; min-width: 0; }
+  .a-name { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a-status { font-size: 10px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .a-online { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+  .a-online.on { background: #639922; }
+  .a-online.busy { background: var(--blue-mid); animation: blink .8s infinite; }
+
+  .crew-mem { padding: 10px; border-top: 0.5px solid var(--border); flex-shrink: 0; }
+  .crew-mem-title { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+  .mem-chip { font-size: 10px; color: var(--text2); padding: 2px 0; border-bottom: 0.5px solid var(--border); padding-bottom: 3px; margin-bottom: 3px; line-height: 1.4; }
+  .mem-chip:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .chat-context { padding: 6px 12px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 32px; }
+  .ctx-label { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+  .ctx-val { font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .ctx-clear { font-size: 10px; color: var(--text3); cursor: pointer; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+  .ctx-clear:hover { background: var(--bg2); color: var(--text); }
+
+  .messages { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .messages::-webkit-scrollbar { width: 3px; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .bubble { display: flex; gap: 8px; align-items: flex-start; animation: fadeUp .2s ease; max-width: 100%; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)} }
+  .bubble.user { flex-direction: row-reverse; }
+  .bav { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; margin-top: 1px; }
+  .bcontent { display: flex; flex-direction: column; gap: 3px; max-width: 82%; min-width: 0; }
+  .bubble.user .bcontent { align-items: flex-end; }
+  .bmeta { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text3); }
+  .bubble.user .bmeta { flex-direction: row-reverse; }
+  .bname { font-weight: 500; }
+  .btext { padding: 8px 11px; border-radius: var(--radius-lg); font-size: 12px; line-height: 1.65; white-space: pre-wrap; border: 0.5px solid var(--border); }
+  .bubble.user .btext { background: var(--blue); color: white; border-color: var(--blue); border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg); }
+  .bthought { font-size: 10px; color: var(--text3); font-style: italic; padding: 3px 8px; background: var(--bg2); border-radius: 4px; border-left: 2px solid var(--border2); margin-bottom: 2px; }
+  .blearned { font-size: 10px; color: #27500A; background: var(--green-light); padding: 3px 8px; border-radius: 4px; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+  .btext pre { background: rgba(0,0,0,.06); border-radius: 4px; padding: 7px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; overflow-x: auto; margin-top: 5px; white-space: pre-wrap; word-break: break-all; }
+
+  .b-pm .btext { background: #EEEDFE; border-color: #AFA9EC; }
+  .b-pm .bav { background: #CCC8F0; color: #3C3489; }
+  .b-pm .bname { color: #3C3489; }
+  .b-arch .btext { background: var(--blue-light); border-color: #85B7EB; }
+  .b-arch .bav { background: #B5D4F4; color: #0C447C; }
+  .b-arch .bname { color: #0C447C; }
+  .b-bld .btext { background: var(--green-light); border-color: #97C459; }
+  .b-bld .bav { background: #C0DD97; color: #27500A; }
+  .b-bld .bname { color: #27500A; }
+  .b-rev .btext { background: #FAEEDA; border-color: #FAC775; }
+  .b-rev .bav { background: #FAC775; color: #633806; }
+  .b-rev .bname { color: #633806; }
+  .b-dep .btext { background: #E1F5EE; border-color: #5DCAA5; }
+  .b-dep .bav { background: #9FE1CB; color: #085041; }
+  .b-dep .bname { color: #085041; }
+  .b-sys .btext { background: var(--bg2); border-color: var(--border); }
+  .b-sys .bav { background: var(--bg2); color: var(--text2); }
+
+  .typing-dots { display: flex; gap: 4px; align-items: center; padding: 4px 2px; }
+  .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); animation: tdot 1.2s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay: .2s; }
+  .typing-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes tdot { 0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1} }
+
+  .proposal { border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: hidden; margin-left: 34px; animation: fadeUp .2s ease; }
+  .proposal-hdr { padding: 9px 12px; background: var(--bg2); border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; }
+  .idea-item { padding: 10px 12px; border-bottom: 0.5px solid var(--border); display: flex; gap: 9px; cursor: pointer; transition: background .12s; }
+  .idea-item:last-child { border-bottom: none; }
+  .idea-item:hover { background: var(--bg2); }
+  .idea-item.sel { background: var(--blue-light); }
+  .idea-num { width: 18px; height: 18px; border-radius: 50%; background: var(--bg2); border: 0.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; color: var(--text2); flex-shrink: 0; margin-top: 2px; }
+  .idea-item.sel .idea-num { background: var(--blue); color: white; border-color: var(--blue); }
+  .idea-body { flex: 1; }
+  .idea-title { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+  .idea-desc { font-size: 11px; color: var(--text2); line-height: 1.5; }
+  .idea-tags { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+  .idea-tag { font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--bg2); color: var(--text3); border: 0.5px solid var(--border); }
+  .proposal-acts { padding: 9px 12px; border-top: 0.5px solid var(--border); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; background: var(--bg2); }
+  .pabtn { padding: 5px 12px; border-radius: var(--radius); font-size: 11px; font-weight: 500; cursor: pointer; border: 0.5px solid; transition: all .15s; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .pabtn-go { background: var(--blue); color: white; border-color: var(--blue); }
+  .pabtn-go:hover:not(:disabled) { background: #0C447C; }
+  .pabtn-go:disabled { opacity: .5; cursor: not-allowed; }
+  .pabtn-sec { background: var(--bg); color: var(--text2); border-color: var(--border); }
+  .pabtn-sec:hover { border-color: var(--border2); color: var(--text); }
+
+  .cp-block { border-radius: var(--radius-lg); border: 1.5px solid var(--blue-mid); padding: 10px 12px; background: var(--blue-light); margin-left: 34px; animation: fadeUp .2s ease; }
+  .cp-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .cp-pill { background: var(--blue); color: white; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 20px; }
+  .cp-title { font-size: 12px; font-weight: 500; color: #0C447C; }
+  .cp-body { font-size: 12px; color: #185FA5; line-height: 1.6; margin-bottom: 8px; }
+  .cp-inp { width: 100%; padding: 6px 9px; border: 0.5px solid #85B7EB; border-radius: var(--radius); font-size: 12px; background: white; color: #0C447C; display: none; margin-bottom: 7px; font-family: inherit; }
+  .cp-inp.show { display: block; }
+  .cp-inp:focus { outline: none; border-color: var(--blue); }
+  .cp-acts { display: flex; gap: 6px; }
+  .cpb { padding: 5px 12px; border-radius: var(--radius); font-size: 11px; font-weight: 500; cursor: pointer; border: 0.5px solid; transition: all .15s; display: flex; align-items: center; gap: 4px; }
+  .cpb-go { background: var(--blue); color: white; border-color: var(--blue); }
+  .cpb-go:hover { background: #0C447C; }
+  .cpb-tw { background: white; color: #185FA5; border-color: #85B7EB; }
+
+  .par-block { border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: hidden; margin-left: 34px; animation: fadeUp .2s ease; }
+  .par-hdr { padding: 7px 11px; background: var(--bg2); font-size: 11px; font-weight: 500; color: var(--text2); display: flex; align-items: center; gap: 6px; border-bottom: 0.5px solid var(--border); }
+  .par-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 0; }
+  .pb { padding: 9px 10px; border-right: 0.5px solid var(--border); }
+  .pb:last-child { border-right: none; }
+  .pb-h { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+  .pb-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background .3s; }
+  .pb-dot.building { background: var(--blue-mid); animation: blink 1s infinite; }
+  .pb-dot.done { background: var(--green); }
+  .pb-name { font-size: 11px; font-weight: 500; color: var(--text2); }
+  .pb-st { font-size: 10px; color: var(--text3); }
+
+  .done-block { border-radius: var(--radius-lg); border: 0.5px solid #5DCAA5; padding: 10px 12px; background: #E1F5EE; margin-left: 34px; animation: fadeUp .2s ease; }
+  .done-title { font-size: 12px; font-weight: 500; color: #085041; display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .done-sub { font-size: 11px; color: #0F6E56; line-height: 1.5; }
+
+  .input-area { padding: 10px 12px; border-top: 0.5px solid var(--border); flex-shrink: 0; }
+  .quick-prompts { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
+  .qp { padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--border); font-size: 11px; color: var(--text2); cursor: pointer; background: var(--bg); transition: all .12s; white-space: nowrap; }
+  .qp:hover { border-color: var(--border2); color: var(--text); background: var(--bg2); }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .chat-ta { flex: 1; padding: 9px 11px; border: 0.5px solid var(--border); border-radius: var(--radius-lg); font-size: 13px; background: var(--bg); color: var(--text); font-family: inherit; resize: none; min-height: 38px; max-height: 120px; line-height: 1.5; transition: border-color .15s; }
+  .chat-ta:focus { outline: none; border-color: var(--blue-mid); }
+  .chat-ta::placeholder { color: var(--text3); }
+  .send-btn { padding: 9px 14px; border-radius: var(--radius-lg); border: none; background: var(--blue); color: white; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; align-self: flex-end; white-space: nowrap; }
+  .send-btn:hover:not(:disabled) { background: #0C447C; }
+  .send-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .spin { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: rot .7s linear infinite; }
+
+  /* FILES */
+  .files-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .ftree { width: 180px; border-right: 0.5px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+  .ftree-hdr { padding: 6px 12px; font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); }
+  .ft-folder { padding: 5px 12px; font-size: 11px; font-weight: 500; color: var(--text2); display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+  .ft-file { padding: 4px 22px; font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 5px; cursor: pointer; transition: background .1s; }
+  .ft-file:hover { background: var(--bg2); }
+  .ft-file.active { background: var(--blue-light); color: var(--blue); }
+  .fidot { width: 5px; height: 5px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+  .ft-file.committed .fidot { background: var(--green); }
+  .ft-file.fresh .fidot { background: var(--blue-mid); }
+  .code-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .code-tb { padding: 7px 12px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .code-fn { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; font-weight: 500; }
+  .code-acts { display: flex; gap: 5px; margin-left: auto; }
+  .cta { padding: 4px 9px; border-radius: var(--radius); border: 0.5px solid var(--border); font-size: 11px; cursor: pointer; background: var(--bg); color: var(--text2); display: flex; align-items: center; gap: 4px; transition: all .15s; }
+  .cta:hover { border-color: var(--border2); color: var(--text); }
+  .cta.primary { background: var(--blue); color: white; border-color: var(--blue); }
+  .cta.primary:hover { background: #0C447C; }
+  .code-body { flex: 1; overflow: auto; padding: 12px; background: var(--bg2); }
+  .code-body pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.7; color: var(--text2); white-space: pre-wrap; word-break: break-all; }
+  .no-file { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 7px; color: var(--text3); font-size: 12px; padding: 3rem; text-align: center; }
+
+  /* MEMORY */
+  .mem-view { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .mem-section { display: flex; flex-direction: column; gap: 8px; }
+  .mem-sec-title { font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; display: flex; align-items: center; gap: 5px; }
+  .mem-entry { display: flex; gap: 8px; padding: 7px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); align-items: flex-start; }
+  .mem-src { font-size: 10px; padding: 1px 6px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+  .mem-txt { font-size: 12px; color: var(--text2); line-height: 1.5; flex: 1; }
+  .mem-del { font-size: 11px; color: var(--text3); cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; }
+  .mem-del:hover { color: #E24B4A; }
+  .pref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+  .pref-card { padding: 8px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+  .pref-lbl { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
+  .pref-val { font-size: 12px; font-weight: 500; }
+  .mem-empty { font-size: 12px; color: var(--text3); padding: 8px 0; }
+
+  /* GITHUB */
+  .gh-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .gh-setup { padding: 14px 16px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .gh-field { margin-bottom: 9px; }
+  .gh-lbl { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .gh-input { width: 100%; padding: 7px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; }
+  .gh-input:focus { outline: none; border-color: var(--blue-mid); }
+  .gh-hint { font-size: 10px; color: var(--text3); margin-top: 3px; line-height: 1.4; }
+  .gh-row { display: flex; gap: 8px; }
+  .gh-con-btn { padding: 7px 14px; border-radius: var(--radius); border: none; background: var(--blue); color: white; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; margin-top: 10px; }
+  .gh-con-btn:hover { background: #0C447C; }
+  .gh-stat { margin-top: 8px; padding: 8px 10px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); font-size: 12px; color: var(--text2); }
+  .commit-log { flex: 1; overflow-y: auto; }
+  .commit-item { padding: 9px 14px; border-bottom: 0.5px solid var(--border); display: flex; gap: 9px; align-items: flex-start; }
+  .c-sha { font-family: 'SF Mono', monospace; font-size: 10px; background: var(--bg2); padding: 2px 5px; border-radius: 3px; color: var(--text2); flex-shrink: 0; margin-top: 1px; }
+  .c-msg { font-size: 12px; font-weight: 500; }
+  .c-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+  .c-files { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .c-fb { font-size: 10px; background: var(--blue-light); color: var(--blue); padding: 1px 6px; border-radius: 10px; font-family: monospace; }
+  .no-commits { padding: 2rem; text-align: center; font-size: 12px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- ══ LOCK SCREEN ══════════════════════════════════════════ -->
+<div id="lock-screen">
+  <div class="lock-card">
+    <div class="lock-logo">
+      <div class="lock-logo-icon">
+        <i class="ti ti-sparkles" style="font-size:18px;color:#185FA5"></i>
+      </div>
+      <div>
+        <div class="lock-title">Vibe Coder</div>
+        <div style="font-size:11px;color:#999;margin-top:1px">Your autonomous AI build crew</div>
+      </div>
+    </div>
+
+    <div id="lock-api-section">
+      <div class="lock-field">
+        <div class="lock-label">Anthropic API Key</div>
+        <input class="lock-input" id="lock-apikey" type="password" placeholder="sk-ant-api03-..." autocomplete="off" onkeydown="if(event.key==='Enter')unlock()">
+        <div class="lock-hint">
+          Get your key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys → Create Key.<br>
+          Your key is saved only in this browser and never sent anywhere except Anthropic's API.
+        </div>
+      </div>
+      <div class="lock-err" id="lock-err"></div>
+    </div>
+
+    <div id="lock-pass-section" style="display:none">
+      <div class="lock-divider">also set an access password</div>
+      <div class="lock-field">
+        <div class="lock-label">Set a password <span style="font-weight:400;text-transform:none;font-size:11px;color:#999">(optional — keeps others out if you share the URL)</span></div>
+        <input class="lock-input" id="lock-newpass" type="password" placeholder="Choose a password..." autocomplete="new-password">
+      </div>
+      <div class="lock-pass-note">Leave blank to skip. You can set this later from the app.</div>
+    </div>
+
+    <button class="lock-btn" id="lock-btn" onclick="unlock()">
+      <i class="ti ti-sparkles"></i>
+      Open Vibe Coder
+    </button>
+
+    <div style="font-size:11px;color:#999;line-height:1.5;text-align:center">
+      Your API key stays in your browser's local storage.<br>It's never stored on any server.
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══════════════════════════════════════════════════ -->
+<div id="app" style="display:none">
+  <div class="topbar">
+    <div class="tl">
+      <div class="logo"><i class="ti ti-sparkles" style="font-size:13px;color:#185FA5"></i></div>
+      <div>
+        <div class="app-name">Vibe Coder <span style="font-size:10px;color:#999;font-weight:400;margin-left:3px">autonomous</span></div>
+      </div>
+    </div>
+    <div class="tr">
+      <div class="sdot" id="sdot"></div>
+      <span class="stxt" id="stxt">Crew ready</span>
+      <button class="tb-btn" id="gh-tb" onclick="switchTab('github')"><i class="ti ti-brand-github"></i><span id="gh-tb-lbl">GitHub</span></button>
+      <button class="tb-btn danger" onclick="lockApp()" title="Lock / change API key"><i class="ti ti-lock"></i></button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-chat" onclick="switchTab('chat')"><i class="ti ti-messages"></i> Chat</div>
+    <div class="tab" id="tab-files" onclick="switchTab('files')"><i class="ti ti-files"></i> Files <span class="tbadge" id="files-badge">0</span></div>
+    <div class="tab" id="tab-memory" onclick="switchTab('memory')"><i class="ti ti-brain"></i> Memory <span class="tbadge" id="mem-badge">0</span></div>
+    <div class="tab" id="tab-github" onclick="switchTab('github')"><i class="ti ti-brand-github"></i> GitHub <span class="tbadge" id="commits-badge">0</span></div>
+  </div>
+
+  <!-- CHAT VIEW -->
+  <div class="view active" id="view-chat">
+    <div class="chat-layout">
+      <div class="crew-panel">
+        <div class="crew-hdr">Your crew</div>
+        <div class="crew-list">
+          <div class="agent-row" id="ar-jordan">
+            <div class="a-av" id="av-jordan" style="background:#CCC8F0;color:#3C3489">JO<div class="a-ring"></div></div>
+            <div class="a-info"><div class="a-name">Jordan</div><div class="a-status" id="st-jordan">PM</div></div>
+            <div class="a-online on" id="ol-jordan"></div>
+          </div>
+          <div class="agent-row" id="ar-maya">
+            <div class="a-av" id="av-maya" style="background:#B5D4F4;color:#0C447C">MY<div class="a-ring"></div></div>
+            <div class="a-info"><div class="a-name">Maya</div><div class="a-status" id="st-maya">Architect</div></div>
+            <div class="a-online on" id="ol-maya"></div>
+          </div>
+          <div class="agent-row" id="ar-kai">
+            <div class="a-av" id="av-kai" style="background:#C0DD97;color:#27500A">KA<div class="a-ring"></div></div>
+            <div class="a-info"><div class="a-name">Kai</div><div class="a-status" id="st-kai">Builder</div></div>
+            <div class="a-online on" id="ol-kai"></div>
+          </div>
+          <div class="agent-row" id="ar-priya">
+            <div class="a-av" id="av-priya" style="background:#FAC775;color:#633806">PR<div class="a-ring"></div></div>
+            <div class="a-info"><div class="a-name">Priya</div><div class="a-status" id="st-priya">Reviewer</div></div>
+            <div class="a-online on" id="ol-priya"></div>
+          </div>
+          <div class="agent-row" id="ar-leo">
+            <div class="a-av" id="av-leo" style="background:#9FE1CB;color:#085041">LE<div class="a-ring"></div></div>
+            <div class="a-info"><div class="a-name">Leo</div><div class="a-status" id="st-leo">Deployer</div></div>
+            <div class="a-online on" id="ol-leo"></div>
+          </div>
+        </div>
+        <div class="crew-mem">
+          <div class="crew-mem-title">Memory</div>
+          <div id="sb-mem"><div style="font-size:10px;color:#999">Nothing yet</div></div>
+        </div>
+      </div>
+
+      <div class="chat-main">
+        <div class="chat-context">
+          <span class="ctx-label">Topic</span>
+          <span class="ctx-val" id="ctx-val">Open conversation — ask anything</span>
+          <span class="ctx-clear" id="ctx-clear-btn" onclick="clearCtx()" style="display:none">Clear</span>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+          <div class="quick-prompts">
+            <span class="qp" onclick="quickSend('Give me some app ideas')">Give me ideas</span>
+            <span class="qp" onclick="quickSend('What should I build next?')">What next?</span>
+            <span class="qp" onclick="quickSend('Tell me about yourselves')">Meet the crew</span>
+            <span class="qp" onclick="quickSend('What have we built so far?')">Our history</span>
+          </div>
+          <div class="input-row">
+            <textarea class="chat-ta" id="chat-ta" placeholder="Chat with your crew — brainstorm, ask questions, give direction..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="handleSend()"><i class="ti ti-send"></i> Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILES VIEW -->
+  <div class="view" id="view-files">
+    <div class="files-layout">
+      <div class="ftree">
+        <div class="ftree-hdr">Files <span id="file-count" style="font-size:10px">0</span></div>
+        <div id="tree-root"></div>
+      </div>
+      <div class="code-pane">
+        <div class="no-file" id="no-file"><i class="ti ti-file-code" style="font-size:26px"></i><div>Select a file</div></div>
+        <div id="code-viewer" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+          <div class="code-tb">
+            <span class="code-fn" id="cv-fn"></span>
+            <div class="code-acts">
+              <button class="cta" onclick="copyFile()"><i class="ti ti-copy"></i> Copy</button>
+              <button class="cta" onclick="dlFile()"><i class="ti ti-download"></i> Download</button>
+              <button class="cta primary" id="commit-btn" onclick="commitSingle()" style="display:none"><i class="ti ti-brand-github"></i> Commit</button>
+            </div>
+          </div>
+          <div class="code-body"><pre id="cv-code"></pre></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEMORY VIEW -->
+  <div class="view" id="view-memory">
+    <div class="mem-view">
+      <div class="mem-section">
+        <div class="mem-sec-title"><i class="ti ti-heart"></i> Preferences learned</div>
+        <div class="pref-grid" id="pref-grid"><div class="mem-empty">Nothing yet — start chatting!</div></div>
+      </div>
+      <div class="mem-section">
+        <div class="mem-sec-title"><i class="ti ti-bulb"></i> Crew learnings</div>
+        <div id="learned-list"><div class="mem-empty">No learnings yet.</div></div>
+      </div>
+      <div class="mem-section">
+        <div class="mem-sec-title"><i class="ti ti-history"></i> Build history</div>
+        <div id="history-list"><div class="mem-empty">No builds yet.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GITHUB VIEW -->
+  <div class="view" id="view-github">
+    <div class="gh-view">
+      <div class="gh-setup">
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px">GitHub integration</div>
+        <div class="gh-field">
+          <div class="gh-lbl">Personal access token</div>
+          <input class="gh-input" id="gh-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+          <div class="gh-hint">GitHub → Settings → Developer settings → Personal access tokens → Generate (repo scope)</div>
+        </div>
+        <div class="gh-row">
+          <div style="flex:1"><div class="gh-lbl">Repository</div><input class="gh-input" id="gh-repo" placeholder="yourname/my-app"></div>
+          <div style="width:90px"><div class="gh-lbl">Branch</div><input class="gh-input" id="gh-branch" value="main"></div>
+        </div>
+        <button class="gh-con-btn" onclick="connectGH()"><i class="ti ti-brand-github"></i> Connect</button>
+        <div class="gh-stat" id="gh-stat">Not connected.</div>
+      </div>
+      <div class="commit-log" id="commit-log"><div class="no-commits" id="no-commits">No commits yet.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── LOCK / UNLOCK ─────────────────────────────────────────────────────────────
+const STORAGE_KEY_API  = 'vc_apikey';
+const STORAGE_KEY_PASS = 'vc_passHash';
+const STORAGE_KEY_MEM  = 'vc_memory';
+
+function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h.toString(36); }
+
+function loadMemoryFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY_MEM);
+    if(raw){ const m=JSON.parse(raw); Object.assign(S.memory,m); updateMemoryUI(); updateSidebarMem(); }
+  }catch(e){}
+}
+
+function saveMemoryToStorage(){
+  try{ localStorage.setItem(STORAGE_KEY_MEM, JSON.stringify(S.memory)); }catch(e){}
+}
+
+function unlock(){
+  const apiKey = document.getElementById('lock-apikey').value.trim();
+  const newPass = document.getElementById('lock-newpass')?.value?.trim();
+  const err = document.getElementById('lock-err');
+
+  if(!apiKey){ showErr('Please enter your Anthropic API key.'); return; }
+  if(!apiKey.startsWith('sk-ant')){ showErr('That doesn\'t look like a valid Anthropic key. It should start with sk-ant...'); return; }
+
+  const storedHash = localStorage.getItem(STORAGE_KEY_PASS);
+  if(storedHash){
+    // returning user — show password field if there's a stored hash
+    const passInput = document.getElementById('lock-passcheck');
+    if(!passInput){
+      // inject password check
+      const section = document.getElementById('lock-api-section');
+      const pDiv = document.createElement('div');
+      pDiv.className = 'lock-field'; pDiv.id = 'lock-passcheck-wrap';
+      pDiv.innerHTML = `<div class="lock-label">Access Password</div><input class="lock-input" id="lock-passcheck" type="password" placeholder="Enter your password..." onkeydown="if(event.key==='Enter')unlock()">`;
+      section.appendChild(pDiv);
+      document.getElementById('lock-passcheck').focus();
+      showErr('This app has a password. Enter it above.');
+      return;
+    }
+    const entered = passInput.value.trim();
+    if(simpleHash(entered) !== storedHash){ showErr('Wrong password. Try again.'); return; }
+  }
+
+  // Save new password if set
+  if(newPass){ localStorage.setItem(STORAGE_KEY_PASS, simpleHash(newPass)); }
+
+  // Save API key
+  localStorage.setItem(STORAGE_KEY_API, apiKey);
+  APP_API_KEY = apiKey;
+
+  // Show app
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadMemoryFromStorage();
+  setTimeout(showWelcome, 400);
+}
+
+function showErr(msg){
+  const el = document.getElementById('lock-err');
+  el.textContent = msg; el.className = 'lock-err show';
+}
+
+function lockApp(){
+  if(!confirm('Lock the app? You\'ll need to re-enter your API key.')) return;
+  localStorage.removeItem(STORAGE_KEY_API);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lock-screen').style.display = 'flex';
+  document.getElementById('lock-apikey').value = '';
+}
+
+// Check on load — if key is stored and no password, go straight in
+window.addEventListener('load', ()=>{
+  const storedKey = localStorage.getItem(STORAGE_KEY_API);
+  const storedPass = localStorage.getItem(STORAGE_KEY_PASS);
+  if(storedKey && !storedPass){
+    APP_API_KEY = storedKey;
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    // pre-fill key field for reference
+    document.getElementById('lock-apikey').value = storedKey;
+    loadMemoryFromStorage();
+    setTimeout(showWelcome, 400);
+  } else if(storedKey && storedPass){
+    // Has password — show password field immediately
+    document.getElementById('lock-apikey').value = storedKey;
+    document.getElementById('lock-newpass')?.closest('div')?.remove();
+    const section = document.getElementById('lock-api-section');
+    const pDiv = document.createElement('div');
+    pDiv.className = 'lock-field'; pDiv.id = 'lock-passcheck-wrap';
+    pDiv.innerHTML = `<div class="lock-label">Access Password</div><input class="lock-input" id="lock-passcheck" type="password" placeholder="Enter your password..." onkeydown="if(event.key==='Enter')unlock()">`;
+    section.appendChild(pDiv);
+    document.getElementById('lock-btn').innerHTML = '<i class="ti ti-lock-open"></i> Unlock';
+    // Show pass section
+    document.getElementById('lock-pass-section').style.display = 'none';
+  } else {
+    // First time — show password setup section
+    document.getElementById('lock-pass-section').style.display = 'block';
+  }
+});
+
+// ── APP STATE ────────────────────────────────────────────────────────────────
+let APP_API_KEY = '';
+
+const S = {
+  busy: false,
+  files: {}, commits: [], activeFile: null,
+  gh: { token:'', repo:'', branch:'main', connected:false },
+  memory: { preferences:{}, learnings:[], history:[], buildCount:0, conversationHistory:[] },
+  resolveCP: null
+};
+
+const AGENTS = {
+  jordan: { av:'JO', cls:'b-pm',   name:'Jordan', role:'Product Manager', bg:'#CCC8F0', color:'#3C3489' },
+  maya:   { av:'MY', cls:'b-arch', name:'Maya',   role:'Architect',       bg:'#B5D4F4', color:'#0C447C' },
+  kai:    { av:'KA', cls:'b-bld',  name:'Kai',    role:'Lead Builder',    bg:'#C0DD97', color:'#27500A' },
+  priya:  { av:'PR', cls:'b-rev',  name:'Priya',  role:'Reviewer',        bg:'#FAC775', color:'#633806' },
+  leo:    { av:'LE', cls:'b-dep',  name:'Leo',    role:'Deployer',        bg:'#9FE1CB', color:'#085041' },
+};
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function ts(){ return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+function switchTab(t){ ['chat','files','memory','github'].forEach(v=>{ document.getElementById('view-'+v)?.classList.toggle('active',v===t); document.getElementById('tab-'+v)?.classList.toggle('active',v===t); }); }
+function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(); } }
+function quickSend(t){ document.getElementById('chat-ta').value=t; handleSend(); }
+function setStatus(txt,mode){ document.getElementById('stxt').textContent=txt; document.getElementById('sdot').className='sdot'+(mode==='live'?' live':mode==='thinking'?' thinking':''); }
+function setAgent(id,mode,status){ document.getElementById('av-'+id)?.classList.toggle('thinking',mode==='thinking'); document.getElementById('ol-'+id).className='a-online'+(mode==='busy'||mode==='thinking'?' busy':' on'); if(status) document.getElementById('st-'+id).textContent=status; document.getElementById('ar-'+id)?.classList.toggle('hl',mode==='thinking'||mode==='busy'); }
+function clearCtx(){ document.getElementById('ctx-val').textContent='Open conversation — ask anything'; document.getElementById('ctx-clear-btn').style.display='none'; }
+function setCtx(txt){ document.getElementById('ctx-val').textContent=txt; document.getElementById('ctx-clear-btn').style.display='inline'; }
+function scrollMsgs(){ const m=document.getElementById('messages'); m.scrollTop=m.scrollHeight; }
+
+// ── BUBBLES ──────────────────────────────────────────────────────────────────
+function addBubble(agentKey, text, thought, isCode, learned){
+  const a=AGENTS[agentKey]; const msgs=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='bubble '+(a.cls||'b-sys');
+  const tH=thought?`<div class="bthought"><i class="ti ti-brain" style="font-size:10px"></i> ${esc(thought)}</div>`:'';
+  const bH=isCode?`<div class="btext"><pre>${esc(text)}</pre></div>`:`<div class="btext">${esc(text)}</div>`;
+  const lH=learned?`<div class="blearned"><i class="ti ti-check"></i>${esc(learned)}</div>`:'';
+  d.innerHTML=`<div class="bav" style="background:${a.bg};color:${a.color}">${a.av}</div><div class="bcontent"><div class="bmeta"><span class="bname">${esc(a.name)}</span><span>${esc(a.role)}</span><span>${ts()}</span></div>${tH}${bH}${lH}</div>`;
+  msgs.appendChild(d); scrollMsgs(); return d;
+}
+
+function addUserBubble(text){
+  const msgs=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='bubble user';
+  d.innerHTML=`<div class="bav" style="background:#E6F1FB;color:#185FA5">ME</div><div class="bcontent"><div class="bmeta"><span class="bname">You</span><span>${ts()}</span></div><div class="btext">${esc(text)}</div></div>`;
+  msgs.appendChild(d); scrollMsgs();
+  S.memory.conversationHistory.push({role:'user',text});
+}
+
+function addTyping(agentKey){
+  const a=AGENTS[agentKey]; const msgs=document.getElementById('messages');
+  const d=document.createElement('div'); d.className='bubble b-sys';
+  d.innerHTML=`<div class="bav" style="background:${a.bg};color:${a.color}">${a.av}</div><div class="bcontent"><div class="bmeta"><span class="bname">${esc(a.name)}</span></div><div class="btext"><div class="typing-dots"><span></span><span></span><span></span></div></div></div>`;
+  msgs.appendChild(d); scrollMsgs(); return d;
+}
+
+// ── IDEAS PROPOSAL ───────────────────────────────────────────────────────────
+function addIdeasProposal(ideas, subtext){
+  return new Promise(resolve=>{
+    const msgs=document.getElementById('messages'); const uid='ip'+Date.now();
+    const d=document.createElement('div'); d.className='proposal';
+    const rows=ideas.map((idea,i)=>`<div class="idea-item" id="${uid}i${i}" onclick="selIdea('${uid}',${i})"><div class="idea-num" id="${uid}n${i}">${i+1}</div><div class="idea-body"><div class="idea-title">${esc(idea.title)}</div><div class="idea-desc">${esc(idea.description)}</div><div class="idea-tags">${(idea.tags||[]).map(t=>`<span class="idea-tag">${esc(t)}</span>`).join('')}</div></div></div>`).join('');
+    d.innerHTML=`<div class="proposal-hdr"><i class="ti ti-bulb" style="font-size:15px;color:#185FA5"></i>${esc(subtext||'Pick an idea to build')}</div><div>${rows}</div><div class="proposal-acts"><button class="pabtn pabtn-go" id="${uid}go" onclick="approveIdea('${uid}')" disabled><i class="ti ti-player-play"></i>Build this</button><button class="pabtn pabtn-sec" onclick="moreIdeas('${uid}')"><i class="ti ti-refresh"></i>More ideas</button><button class="pabtn pabtn-sec" onclick="dismissIdeas('${uid}')">Just browsing</button></div>`;
+    msgs.appendChild(d); scrollMsgs(); d._ideas=ideas; d._resolve=resolve; window['_ip_'+uid]=d;
+  });
+}
+function selIdea(uid,i){ const c=window['_ip_'+uid]; if(!c) return; c._sel=i; c.querySelectorAll('.idea-item').forEach((el,idx)=>el.classList.toggle('sel',idx===i)); document.getElementById(uid+'go').disabled=false; }
+function approveIdea(uid){ const c=window['_ip_'+uid]; if(!c||c._sel===undefined) return; const idea=c._ideas[c._sel]; c.style.opacity='.5'; c.style.pointerEvents='none'; const f=c._resolve; c._resolve=null; addLearning('Approved: '+idea.title); updatePrefFromIdea(idea); if(f) f({action:'build',idea}); }
+function moreIdeas(uid){ const c=window['_ip_'+uid]; c.style.opacity='.5'; c.style.pointerEvents='none'; const f=c._resolve; c._resolve=null; if(f) f({action:'more'}); }
+function dismissIdeas(uid){ const c=window['_ip_'+uid]; c.style.opacity='.5'; c.style.pointerEvents='none'; const f=c._resolve; c._resolve=null; if(f) f({action:'dismiss'}); }
+
+// ── CHECKPOINTS ──────────────────────────────────────────────────────────────
+function addCP(title, body){
+  return new Promise(resolve=>{
+    const msgs=document.getElementById('messages'); const uid='cp'+Date.now();
+    const d=document.createElement('div'); d.className='cp-block';
+    d.innerHTML=`<div class="cp-top"><span class="cp-pill">Your call</span><span class="cp-title">${esc(title)}</span></div><div class="cp-body">${esc(body)}</div><input class="cp-inp" id="${uid}i" placeholder="Any tweaks? Or just approve..."><div class="cp-acts"><button class="cpb cpb-go" onclick="doCP('${uid}')"><i class="ti ti-check"></i>Looks good</button><button class="cpb cpb-tw" onclick="showCPI('${uid}')"><i class="ti ti-edit"></i>Change something</button></div>`;
+    msgs.appendChild(d); scrollMsgs(); S.resolveCP=resolve;
+  });
+}
+function showCPI(uid){ const i=document.getElementById(uid+'i'); i.className='cp-inp show'; i.focus(); }
+function doCP(uid){ const i=document.getElementById(uid+'i'); const fb=i?.value?.trim()||null; const card=i?.closest('.cp-block'); if(card){card.style.opacity='.5';card.style.pointerEvents='none';} const f=S.resolveCP; S.resolveCP=null; if(fb) learnFromFeedback(fb); if(f) f(fb); }
+
+// ── MEMORY ───────────────────────────────────────────────────────────────────
+function addLearning(text){ S.memory.learnings.push({text,ts:ts()}); saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }
+function bumpPref(k){ S.memory.preferences[k]=(S.memory.preferences[k]||0)+1; saveMemoryToStorage(); updateMemoryUI(); }
+function updatePrefFromIdea(idea){ (idea.tags||[]).forEach(t=>bumpPref(t)); }
+function learnFromFeedback(fb){ const l=fb.toLowerCase(); if(l.includes('simpl')||l.includes('minimal'))bumpPref('minimal'); if(l.includes('modern')||l.includes('slick'))bumpPref('modern'); if(l.includes('dark'))bumpPref('dark mode'); if(l.includes('fast'))bumpPref('performance'); addLearning('You said: '+fb.substring(0,60)); }
+function buildMemCtx(){ const prefs=Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k).join(', '); const recent=S.memory.history.slice(-3).map(h=>h.title).join(', '); const conv=S.memory.conversationHistory.slice(-4).map(m=>`${m.role==='user'?'User':'Crew'}: ${m.text.substring(0,80)}`).join('\n'); return `Preferences: ${prefs||'unknown'}. Recent builds: ${recent||'none'}. Recent conversation:\n${conv||'none'}`; }
+function delLearning(i){ S.memory.learnings.splice(i,1); saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }
+
+function updateMemoryUI(){
+  const pg=document.getElementById('pref-grid'); const prefs=Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  pg.innerHTML=prefs.length?prefs.map(([k,v])=>`<div class="pref-card"><div class="pref-lbl">Preference</div><div class="pref-val">${esc(k)} <span style="font-size:10px;color:#999">×${v}</span></div></div>`).join(''):'<div class="mem-empty">Nothing yet.</div>';
+  const ll=document.getElementById('learned-list');
+  ll.innerHTML=S.memory.learnings.length?S.memory.learnings.slice().reverse().map((l,i)=>`<div class="mem-entry"><span class="mem-src" style="background:#EAF3DE;color:#27500A">learned</span><div class="mem-txt">${esc(l.text)}</div><span class="mem-del" onclick="delLearning(${S.memory.learnings.length-1-i})"><i class="ti ti-x"></i></span></div>`).join(''):'<div class="mem-empty">No learnings yet.</div>';
+  const hl=document.getElementById('history-list');
+  hl.innerHTML=S.memory.history.length?S.memory.history.slice().reverse().map(h=>`<div class="mem-entry"><span class="mem-src" style="background:#E6F1FB;color:#185FA5">build</span><div class="mem-txt"><strong>${esc(h.title)}</strong><br><span style="font-size:10px;color:#999">${esc(h.ts)}</span></div></div>`).join(''):'<div class="mem-empty">No builds yet.</div>';
+  document.getElementById('mem-badge').textContent=S.memory.learnings.length+S.memory.history.length;
+}
+function updateSidebarMem(){ const el=document.getElementById('sb-mem'); const r=S.memory.learnings.slice(-3).reverse(); el.innerHTML=r.length?r.map(l=>`<div class="mem-chip">${esc(l.text.substring(0,38))}${l.text.length>38?'...':''}</div>`).join(''):'<div style="font-size:10px;color:#999">Nothing yet</div>'; }
+
+// ── CLAUDE API ────────────────────────────────────────────────────────────────
+async function callClaude(sys,usr,max){
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':APP_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max||900,system:sys,messages:[{role:'user',content:usr}]})
+  });
+  const d=await r.json();
+  if(d.error) throw new Error(d.error.message);
+  return d.content?.[0]?.text||'';
+}
+
+// ── ROUTING ───────────────────────────────────────────────────────────────────
+async function handleSend(){
+  const ta=document.getElementById('chat-ta'); const text=ta.value.trim();
+  if(!text||S.busy) return;
+  ta.value=''; ta.style.height='auto'; addUserBubble(text);
+  const btn=document.getElementById('send-btn'); btn.disabled=true; btn.innerHTML='<div class="spin"></div>';
+  S.busy=true; setStatus('Thinking...','thinking');
+  try{ await routeMessage(text); }
+  catch(e){ addBubble('jordan','Something went wrong: '+e.message); }
+  S.busy=false; btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> Send'; setStatus('Crew ready','');
+  ['jordan','maya','kai','priya','leo'].forEach(a=>setAgent(a,'on'));
+}
+
+async function routeMessage(text){
+  const memCtx=buildMemCtx(); const lower=text.toLowerCase();
+  const routeRaw=await callClaude(`You are a routing system. Given a user message, output ONLY one word: "chat", "brainstorm", "build", "history", or "feedback".`,`Message: "${text}"\nContext: ${memCtx}`,50);
+  const route=routeRaw.trim().toLowerCase().replace(/[^a-z]/g,'');
+  if(route==='build') await handleBuild(text);
+  else if(route==='brainstorm') await handleBrainstorm(text);
+  else if(route==='history') await handleHistory(text);
+  else if(route==='feedback') await handleFeedback(text);
+  else await handleChat(text);
+}
+
+async function handleChat(text){
+  const memCtx=buildMemCtx();
+  const decideRaw=await callClaude(`Decide which 1-2 agents respond. Agents: jordan (PM), maya (architect), kai (builder), priya (reviewer), leo (deployer). Output JSON only: {"agents":["jordan"]}`,`Message: "${text}"\nMemory: ${memCtx}`,100);
+  let decide={agents:['jordan']};
+  try{decide=JSON.parse(decideRaw);}catch{const m=decideRaw.match(/\{[\s\S]*\}/);if(m)try{decide=JSON.parse(m[0]);}catch{}}
+  const personalities={
+    jordan:`You are Jordan, a sharp and personable Product Manager. Enthusiastic about ideas, warm, occasionally witty. 2-4 sentences max.`,
+    maya:`You are Maya, a thoughtful Software Architect. Precise but approachable, explains tech in plain English. 2-4 sentences max.`,
+    kai:`You are Kai, an enthusiastic builder who loves coding. Gets excited about what's possible. 2-4 sentences max.`,
+    priya:`You are Priya, a meticulous reviewer. Constructive, thinks about quality and edge cases. 2-4 sentences max.`,
+    leo:`You are Leo, a calm pragmatic deployer. Thinks about reliability and shipping. 2-4 sentences max.`
+  };
+  for(const agentKey of (decide.agents||['jordan']).slice(0,2)){
+    const a=AGENTS[agentKey]; if(!a) continue;
+    setAgent(agentKey,'thinking','Replying...');
+    const typing=addTyping(agentKey);
+    const reply=await callClaude(personalities[agentKey]+`\n\nMemory: ${memCtx}`,`User: "${text}"\n\nReply naturally as ${a.name}.`,500);
+    typing.remove(); setAgent(agentKey,'on');
+    addBubble(agentKey,reply);
+    S.memory.conversationHistory.push({role:'agent',agent:agentKey,text:reply.substring(0,100)});
+  }
+  setCtx('Chatting');
+}
+
+async function handleBrainstorm(text){
+  setAgent('jordan','thinking','Coming up with ideas...'); setStatus('Jordan brainstorming...','thinking');
+  const memCtx=buildMemCtx(); const typing=addTyping('jordan');
+  const raw=await callClaude(`You are Jordan, a creative PM. Output ONLY valid JSON.`,`Brainstorm 3 app ideas.\nRequest: "${text}"\nMemory: ${memCtx}\n\nOutput:\n{"thought":"reasoning","opening":"friendly 1-2 sentence intro","ideas":[{"title":"Name","description":"2 sentence description","tags":["tag1"]}]}\n\nJSON only.`,900);
+  let data={thought:'',opening:'Here are some ideas!',ideas:[]};
+  try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(m)try{data=JSON.parse(m[0]);}catch{}}
+  typing.remove(); setAgent('jordan','on');
+  addBubble('jordan',data.opening||'Here are some ideas!',data.thought||null);
+  let looping=true;
+  while(looping){
+    const result=await addIdeasProposal(data.ideas,"Jordan's proposals");
+    if(result.action==='build'){ looping=false; addBubble('jordan',`Great choice! Starting the build for "${result.idea.title}"...`); await runBuild(result.idea.title+' — '+result.idea.description,result.idea); }
+    else if(result.action==='more'){
+      setAgent('jordan','thinking','More ideas...');
+      const t2=addTyping('jordan');
+      const r2=await callClaude(`You are Jordan. Generate 3 different ideas. JSON only.`,`Previous: ${data.ideas.map(i=>i.title).join(', ')}\nMemory: ${memCtx}\n\nSame JSON shape, 3 new ideas.`,900);
+      try{data=JSON.parse(r2);}catch{const m=r2.match(/\{[\s\S]*\}/);if(m)try{data=JSON.parse(m[0]);}catch{}}
+      t2.remove(); setAgent('jordan','on');
+      addBubble('jordan',"Here's a fresh batch!",'Varying style and category...');
+    } else { looping=false; addBubble('jordan',"No problem — we can come back to this whenever!"); clearCtx(); }
+  }
+}
+
+async function handleHistory(text){
+  setAgent('jordan','thinking','Checking history...'); const typing=addTyping('jordan');
+  const reply=await callClaude(`You are Jordan. Answer questions about build history warmly.`,`Question: "${text}"\nMemory: ${buildMemCtx()}\n\nAnswer in 2-4 sentences. If no history, say you're just getting started.`,500);
+  typing.remove(); setAgent('jordan','on'); addBubble('jordan',reply);
+}
+
+async function handleFeedback(text){
+  learnFromFeedback(text); setAgent('jordan','thinking','Processing...');
+  const typing=addTyping('jordan');
+  const reply=await callClaude(`You are Jordan. Acknowledge feedback warmly and explain how you'll apply it.`,`Feedback: "${text}"\nPreferences: ${buildMemCtx()}\n\nAcknowledge in 2-3 sentences.`,400);
+  typing.remove(); setAgent('jordan','on'); addBubble('jordan',reply,null,false,"Got it — I'll apply this to future builds");
+}
+
+async function handleBuild(text){ setCtx('Building: '+text.substring(0,40)); await runBuild(text); }
+
+// ── BUILD PIPELINE ────────────────────────────────────────────────────────────
+async function runBuild(idea, ideaObj){
+  S.memory.buildCount++; setStatus('Building...','live'); const memCtx=buildMemCtx();
+  S.files={}; renderTree();
+
+  setAgent('jordan','thinking','Writing spec...');
+  const st=addTyping('jordan');
+  const spec=await callClaude(`You are Jordan, a PM. Write clear product specs. Plain English, no jargon.`,`Spec for: "${idea}"\nMemory: ${memCtx}\n\nFormat:\n✦ What it is\n✦ Who it's for\n✦ Core features (4-6)\n✦ The feel\n✦ What makes it special\n\nMax 200 words.`,900);
+  st.remove(); setAgent('jordan','on'); addBubble('jordan',spec,'Writing spec based on your history...');
+
+  const specFb=await addCP('Does this match your vision?','Approve or give feedback.');
+  if(specFb) learnFromFeedback(specFb);
+
+  setAgent('maya','thinking','Designing blueprint...');
+  const at=addTyping('maya');
+  const archRaw=await callClaude(`You are Maya, architect. Output ONLY valid JSON.`,`Design components for: "${idea}"\nSpec: ${spec}\nPrefs: ${memCtx}\n\nOutput:\n{"overview":"2 sentence summary","thought":"reasoning","components":[{"id":"c1","name":"Name","file":"src/components/Name.jsx","description":"what it does"}]}\n\n3-5 components. JSON only.`,900);
+  let arch={overview:'',thought:'',components:[{id:'c1',name:'App',file:'src/App.jsx',description:'Main app'}]};
+  try{arch=JSON.parse(archRaw);}catch{const m=archRaw.match(/\{[\s\S]*\}/);if(m)try{arch=JSON.parse(m[0]);}catch{}}
+  at.remove(); setAgent('maya','on');
+  addBubble('maya',`${arch.overview}\n\n${arch.components.length} components:\n${arch.components.map(c=>`• ${c.name} — ${c.description}`).join('\n')}`,arch.thought||null,false,arch.components.length>2?`${arch.components.length}-component structure`:'');
+
+  const archFb=await addCP('Happy with the blueprint?','Approve to start coding or request changes.');
+  if(archFb) learnFromFeedback(archFb);
+
+  setAgent('kai','thinking','Spawning parallel builders...');
+  addBubble('kai',`Splitting into ${arch.components.length} parallel agents — each tackles a different component simultaneously.`,`Coordinating ${arch.components.length} sub-builders...`);
+
+  const parBlock=document.createElement('div'); parBlock.className='par-block';
+  const pbCols=arch.components.map(c=>`<div class="pb" id="pb-${c.id}"><div class="pb-h"><div class="pb-dot building" id="pbdot-${c.id}"></div><div class="pb-name">${esc(c.name)}</div></div><div class="pb-st" id="pbst-${c.id}">Building...</div></div>`).join('');
+  parBlock.innerHTML=`<div class="par-hdr"><i class="ti ti-topology-star"></i>${arch.components.length} agents running in parallel</div><div class="par-grid">${pbCols}</div>`;
+  document.getElementById('messages').appendChild(parBlock); scrollMsgs();
+
+  const built=await Promise.all(arch.components.map(async(comp)=>{
+    const code=await callClaude(`You are a sub-builder. Write a complete React component. Output ONLY code — no explanation, no fences.`,`Build: ${comp.name} (${comp.description})\nSpec: ${spec}\nStyle prefs: ${memCtx}\n\nComplete React + Tailwind component. Beautiful, functional, production-ready.`,900);
+    document.getElementById('pbdot-'+comp.id).className='pb-dot done';
+    document.getElementById('pbst-'+comp.id).textContent='Done ✓';
+    addFile(comp.file,code,'Kai'); return {...comp,code};
+  }));
+  setAgent('kai','on','Builder');
+  addBubble('kai',`All ${built.length} components done! Parallel power.`,null,false,`${built.length} components simultaneously`);
+
+  addFile('package.json',JSON.stringify({name:idea.split(' ').slice(0,3).join('-').toLowerCase().replace(/[^a-z0-9-]/g,''),version:'0.1.0',private:true,scripts:{dev:'vite',build:'vite build'},dependencies:{react:'^18.2.0','react-dom':'^18.2.0'},devDependencies:{'@vitejs/plugin-react':'^4.0.0',vite:'^4.4.0',tailwindcss:'^3.3.0'}},null,2),'System');
+  addFile('index.css','@tailwind base;\n@tailwind components;\n@tailwind utilities;','System');
+  addFile('README.md',`# ${idea.substring(0,40)}\n\nBuilt with Vibe Coder.\n\n## Start\n\`\`\`\nnpm install && npm run dev\n\`\`\`\n\n## Components\n${built.map(c=>`- **${c.name}** — ${c.description}`).join('\n')}\n`,'System');
+
+  setAgent('priya','thinking','Reviewing...');
+  const rt=addTyping('priya');
+  const allCode=built.map(c=>`// ${c.file}\n${c.code}`).join('\n---\n').substring(0,3000);
+  const review=await callClaude(`You are Priya, reviewer. Plain English, no jargon.`,`Review ${built.length} React components.\n${allCode}\n\nFormat:\n⭐ Score: X/10\n✅ What's great\n⚠️ Watch out for\n💡 Quick wins\n🧠 Learned for next time\n🟢 Verdict\n\nMax 200 words.`,900);
+  const lm=review.match(/🧠[^\n]*\n([^\n]+)/); const ln=lm?lm[1].trim():null;
+  if(ln) addLearning('Priya: '+ln);
+  rt.remove(); setAgent('priya','on'); addBubble('priya',review,'Reviewing all components...',false,ln||null);
+
+  const codeFb=await addCP('Any changes before shipping?','Approve to commit, or request edits.');
+  if(codeFb) learnFromFeedback(codeFb);
+
+  setAgent('leo','thinking','Shipping...');
+  const dt=addTyping('leo');
+  if(S.gh.connected){
+    const allPaths=Object.keys(S.files); const committed=[];
+    for(const path of allPaths){ const sha=await commitToGH(path,S.files[path].content,`feat: ${path}`); if(sha) committed.push(path); }
+    dt.remove(); setAgent('leo','on');
+    if(committed.length>0){ addCommitEntry(committed,`feat: ${idea.substring(0,50)}`,committed.length+'f'); addBubble('leo',`Done! ${committed.length} files committed to ${S.gh.repo}.`,null,false,'Auto-commit complete'); }
+  } else {
+    dt.remove(); setAgent('leo','on');
+    addBubble('leo','Everything\'s ready in the Files tab. Connect GitHub in the GitHub tab to auto-commit next time.');
+  }
+
+  S.memory.history.push({title:idea.substring(0,50),ts:ts(),files:Object.keys(S.files).length});
+  saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); setStatus('Done ✓','');
+
+  const doneEl=document.createElement('div'); doneEl.className='done-block';
+  doneEl.innerHTML=`<div class="done-title"><i class="ti ti-confetti"></i>Build #${S.memory.buildCount} complete!</div><div class="done-sub">${built.length} components in parallel · ${Object.keys(S.files).length} files · ${S.gh.connected?'Committed to '+S.gh.repo:'Files tab ready'} · Crew learned from this one</div>`;
+  document.getElementById('messages').appendChild(doneEl); scrollMsgs();
+  switchTab('files');
+
+  setTimeout(()=>{ addBubble('jordan',`Build #${S.memory.buildCount} done! What do you want to tackle next?`,'Thinking about what might interest them next...'); },1000);
+}
+
+// ── FILES ─────────────────────────────────────────────────────────────────────
+function addFile(path,content,agent){ S.files[path]={content,agent,ts:new Date()}; renderTree(); document.getElementById('files-badge').textContent=Object.keys(S.files).length; document.getElementById('file-count').textContent=Object.keys(S.files).length; }
+function renderTree(){
+  const root=document.getElementById('tree-root'); const folders={};
+  Object.keys(S.files).forEach(p=>{ const parts=p.split('/'); const folder=parts.length>1?parts.slice(0,-1).join('/'):''; if(!folders[folder])folders[folder]=[]; folders[folder].push(p); });
+  let html='';
+  (folders['']||[]).forEach(p=>{ const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(p)}</div>`; });
+  Object.keys(folders).filter(f=>f!=='').forEach(folder=>{ html+=`<div class="ft-folder"><i class="ti ti-folder" style="font-size:11px"></i>${esc(folder)}/</div>`; (folders[folder]||[]).forEach(p=>{ const fname=p.split('/').pop(); const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')" style="padding-left:28px"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(fname)}</div>`; }); });
+  root.innerHTML=html;
+}
+function openFile(path){ S.activeFile=path; const f=S.files[path]; if(!f) return; document.getElementById('no-file').style.display='none'; const cv=document.getElementById('code-viewer'); cv.style.display='flex'; document.getElementById('cv-fn').textContent=path; document.getElementById('cv-code').textContent=f.content; const committed=S.commits.some(c=>c.files.includes(path)); document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none'; renderTree(); }
+function copyFile(){ if(S.activeFile) navigator.clipboard?.writeText(S.files[S.activeFile]?.content||''); }
+function dlFile(){ if(!S.activeFile) return; const b=new Blob([S.files[S.activeFile]?.content||''],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=S.activeFile.split('/').pop(); a.click(); }
+async function commitSingle(){ if(!S.activeFile||!S.gh.connected) return; const btn=document.getElementById('commit-btn'); btn.innerHTML='<div class="spin"></div>'; btn.disabled=true; const sha=await commitToGH(S.activeFile,S.files[S.activeFile]?.content||'',`feat: ${S.activeFile}`); if(sha){addCommitEntry([S.activeFile],`feat: ${S.activeFile}`,sha);openFile(S.activeFile);} btn.innerHTML='<i class="ti ti-brand-github"></i>Commit'; btn.disabled=false; }
+
+// ── GITHUB ────────────────────────────────────────────────────────────────────
+async function connectGH(){ const token=document.getElementById('gh-token').value.trim(); const repo=document.getElementById('gh-repo').value.trim(); const branch=document.getElementById('gh-branch').value.trim()||'main'; if(!token||!repo){document.getElementById('gh-stat').textContent='Enter token and repo.';return;} document.getElementById('gh-stat').textContent='Verifying...'; try{ const r=await fetch(`https://api.github.com/repos/${repo}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}}); const d=await r.json(); if(r.ok){S.gh={token,repo,branch,connected:true}; document.getElementById('gh-stat').innerHTML=`<span style="color:#27500A">Connected to <strong>${esc(d.full_name)}</strong></span>`; document.getElementById('gh-tb').className='tb-btn on'; document.getElementById('gh-tb-lbl').textContent=repo.split('/')[1]||repo; addLearning('GitHub: '+repo); addBubble('leo',`GitHub connected to ${repo}! I'll auto-commit after every build.`); }else{document.getElementById('gh-stat').textContent='Error: '+d.message;} }catch(e){document.getElementById('gh-stat').textContent='Network error.';} }
+async function commitToGH(path,content,msg){ if(!S.gh.connected) return null; try{ const {token,repo,branch}=S.gh; const headers={Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'}; let sha=null; const gr=await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,{headers}); if(gr.ok){const gd=await gr.json();sha=gd.sha;} const body={message:msg,content:btoa(unescape(encodeURIComponent(content))),branch}; if(sha)body.sha=sha; const pr=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{method:'PUT',headers,body:JSON.stringify(body)}); const pd=await pr.json(); return pr.ok?pd.commit?.sha?.substring(0,7)||'ok':null; }catch(e){return null;} }
+function addCommitEntry(files,msg,sha){ S.commits.push({files,msg,sha,ts:new Date()}); document.getElementById('commits-badge').textContent=S.commits.length; document.getElementById('no-commits')?.remove(); const log=document.getElementById('commit-log'); const d=document.createElement('div'); d.className='commit-item'; d.innerHTML=`<span class="c-sha">${esc(sha)}</span><div><div class="c-msg">${esc(msg)}</div><div class="c-meta">${new Date().toLocaleTimeString()} · ${files.length} file${files.length!==1?'s':''}</div><div class="c-files">${files.map(f=>`<span class="c-fb">${esc(f)}</span>`).join('')}</div></div>`; log.insertBefore(d,log.firstChild); }
+
+// ── WELCOME ───────────────────────────────────────────────────────────────────
+function showWelcome(){
+  addBubble('jordan',"Hey! I'm Jordan, your PM. The whole crew is here — Maya, Kai, Priya, and Leo. You can chat with us, brainstorm ideas, ask us anything, or just say what you want to build and we'll get moving. What's on your mind?",'First contact — introduce the crew warmly...');
+}
+</script>
+</body>
+</html>

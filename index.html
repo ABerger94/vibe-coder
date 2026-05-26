@@ -711,7 +711,7 @@ async function callClaude(sys,usr,max){
   const r=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':APP_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max||900,system:sys,messages:[{role:'user',content:usr}]})
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:max||900,system:sys,messages:[{role:'user',content:usr}]})
   });
   const d=await r.json();
   if(d.error) throw new Error(d.error.message);

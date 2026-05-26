@@ -6,7 +6,7 @@
 <title>Vibe Coder</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <style>
-  :root {
+  :root {h
     --bg: #ffffff;
     --bg2: #f7f7f5;
     --bg3: #f0ede8;
@@ -36,6 +36,10 @@
       --blue-light: #0d2a45;
       --green-light: #1a2e0a;
     }
+        /* agent bubbles with hardcoded light backgrounds need dark-mode overrides */
+        .b-pm .btext  { background: #1c1838; border-color: #4a44a0; }
+        .b-rev .btext { background: #261c08; border-color: #7a5810; }
+        .b-dep .btext { background: #061a12; border-color: #1a7a5a; }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }

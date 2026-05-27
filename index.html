@@ -280,7 +280,8 @@
   .code-body pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.7; color: var(--text2); white-space: pre-wrap; word-break: break-all; }
   .no-file { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 7px; color: var(--text3); font-size: 12px; padding: 3rem; text-align: center; }
   .preview-viewer { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
-  .preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+  .preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; overflow: hidden; }
+  .preview-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
   .preview-note { font-size: 11px; color: var(--text3); margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .file-empty { padding: 14px 12px; color: var(--text3); font-size: 11px; line-height: 1.5; }
 
@@ -531,9 +532,10 @@
             <div class="code-acts">
               <button class="cta" onclick="showActiveCode()"><i class="ti ti-code"></i> Code</button>
               <button class="cta" onclick="showPreview()"><i class="ti ti-refresh"></i> Refresh</button>
+              <button class="cta" onclick="openStackBlitzProject()"><i class="ti ti-external-link"></i> Open</button>
             </div>
           </div>
-          <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts"></iframe>
+          <div id="preview-frame" class="preview-frame"></div>
         </div>
       </div>
     </div>
@@ -622,6 +624,8 @@ const STORAGE_KEY_MEM  = 'vc_memory';
 const STORAGE_KEY_PROJECT = 'vc_project';
 const STORAGE_KEY_SETTINGS = 'vc_settings';
 const STORAGE_KEY_GITHUB = 'vc_github';
+let STACKBLITZ_VM = null;
+let STACKBLITZ_LOADING = null;
 
 function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h.toString(36); }
 
@@ -1351,6 +1355,68 @@ function normalizePreviewCode(path,code,name){
   return `// ${path}\n${out}\nif (typeof ${name} !== 'undefined') { window[${JSON.stringify(name)}]=${name}; window.__previewComponents.push({name:${JSON.stringify(name)}, path:${JSON.stringify(path)}, component:${name}}); }`;
 }
 function scriptSafe(s){ return String(s||'').replace(/<\/script/gi,'<\\/script'); }
+function ensureStackBlitzSDK(){
+  if(window.StackBlitzSDK) return Promise.resolve(window.StackBlitzSDK);
+  if(STACKBLITZ_LOADING) return STACKBLITZ_LOADING;
+  STACKBLITZ_LOADING=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/@stackblitz/sdk/bundles/sdk.umd.js';
+    s.onload=()=>resolve(window.StackBlitzSDK);
+    s.onerror=()=>reject(new Error('Could not load StackBlitz SDK. Check your network connection.'));
+    document.head.appendChild(s);
+  });
+  return STACKBLITZ_LOADING;
+}
+function projectComponentName(path,code){
+  return previewComponentName(path,code).replace(/[^A-Za-z0-9_$]/g,'')||previewNameFromPath(path);
+}
+function normalizeProjectComponent(path,code){
+  let out=stripCodeFence(code);
+  const name=projectComponentName(path,out);
+  out=out.replace(/^\s*import\s+['"][^'"]+['"]\s*;?\s*/gm,'');
+  if(!/export\s+default/.test(out)){
+    if(new RegExp(`(?:function|class)\\s+${name}\\b`).test(out)||new RegExp(`(?:const|let|var)\\s+${name}\\s*=`).test(out)) out+=`\n\nexport default ${name};\n`;
+    else out=`export default function ${name}(){\n  return <div className="p-6 text-slate-700">Component ${name} did not expose a renderable export.</div>;\n}\n`;
+  }
+  return out;
+}
+function makeStackBlitzFiles(){
+  const files={};
+  Object.entries(S.files).forEach(([path,file])=>{ files[path]=String(file.content||''); });
+  const components=getPreviewFiles().filter(p=>!/\/?App\.(jsx|tsx|js|ts)$/i.test(p));
+  components.forEach(path=>{ files[path]=normalizeProjectComponent(path,S.files[path]?.content||''); });
+  const hasApp=Object.keys(files).some(p=>/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(p));
+  if(hasApp){
+    const appPath=Object.keys(files).find(p=>/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(p));
+    files[appPath]=normalizeProjectComponent(appPath,files[appPath]);
+  } else {
+    const imports=components.map((path,i)=>`import Component${i} from './${path.replace(/^src\//,'')}';`).join('\n');
+    const renders=components.map((path,i)=>`        <section className="rounded-lg border border-slate-200 bg-white overflow-hidden"><div className="border-b border-slate-200 px-3 py-2 text-xs font-medium text-slate-500">${esc(path)}</div><Component${i} /></section>`).join('\n');
+    files['src/App.jsx']=`${imports}\n\nexport default function App(){\n  return <main className="min-h-screen bg-slate-50 p-4 space-y-4">\n${renders||'    <div className="p-8 text-slate-500">No previewable components yet.</div>'}\n  </main>;\n}\n`;
+  }
+  files['index.html']=files['index.html']||'<div id="root"></div><script type="module" src="/src/main.jsx"><\\/script>';
+  files['src/main.jsx']=files['src/main.jsx']||'import React from "react";\nimport { createRoot } from "react-dom/client";\nimport App from "./App.jsx";\nimport "../index.css";\n\ncreateRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);\n';
+  files['index.css']=files['index.css']||'@tailwind base;\n@tailwind components;\n@tailwind utilities;\n';
+  files['package.json']=JSON.stringify({
+    name:(S.project.title||'vibe-coder-app').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'vibe-coder-app',
+    version:'0.1.0',
+    private:true,
+    scripts:{dev:'vite --host 0.0.0.0',start:'vite --host 0.0.0.0',build:'vite build'},
+    dependencies:{'@vitejs/plugin-react':'latest',vite:'latest',react:'latest','react-dom':'latest','lucide-react':'latest'},
+    devDependencies:{tailwindcss:'latest',postcss:'latest',autoprefixer:'latest'}
+  },null,2);
+  files['tailwind.config.js']=files['tailwind.config.js']||'export default { content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"], theme: { extend: {} }, plugins: [] };\n';
+  files['postcss.config.js']=files['postcss.config.js']||'export default { plugins: { tailwindcss: {}, autoprefixer: {} } };\n';
+  return files;
+}
+function makeStackBlitzProject(){
+  return {
+    title:S.project.title||'Vibe Coder App',
+    description:'Generated by Vibe Coder',
+    template:'node',
+    files:makeStackBlitzFiles()
+  };
+}
 function previewErrorDoc(message){
   return `<!doctype html><html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"><div style="padding:18px;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(message)}</div></body></html>`;
 }
@@ -1444,15 +1510,37 @@ try {
 </body>
 </html>`;
 }
-function showPreview(){
+async function showPreview(){
   const paths=getPreviewFiles();
   document.getElementById('no-file').style.display='none';
   document.getElementById('code-viewer').style.display='none';
   const pv=document.getElementById('preview-viewer');
   const frame=document.getElementById('preview-frame');
   pv.style.display='flex';
-  document.getElementById('preview-note').textContent=paths.length?`${paths.length} generated component${paths.length===1?'':'s'}`:'No previewable React files';
-  frame.srcdoc=previewSourceDoc();
+  document.getElementById('preview-note').textContent=paths.length?`Starting real StackBlitz runtime for ${paths.length} component${paths.length===1?'':'s'}...`:'No previewable React files';
+  frame.innerHTML='<div class="vc-preview-loading">Starting StackBlitz preview...</div>';
+  if(!paths.length){ frame.innerHTML='<div class="vc-preview-error">No previewable React files were generated yet.</div>'; return; }
+  try{
+    const sdk=await ensureStackBlitzSDK();
+    STACKBLITZ_VM=await sdk.embedProject('preview-frame',makeStackBlitzProject(),{
+      openFile:'src/App.jsx',
+      terminalHeight:30,
+      view:'preview',
+      hideExplorer:false,
+      hideNavigation:false,
+      forceEmbedLayout:true,
+      clickToLoad:false
+    });
+    document.getElementById('preview-note').textContent='Running in StackBlitz WebContainers';
+  }catch(err){
+    frame.innerHTML=`<div class="vc-preview-error">${esc(err.message||'StackBlitz preview failed.')}</div>`;
+    document.getElementById('preview-note').textContent='Preview failed';
+  }
+}
+async function openStackBlitzProject(){
+  if(!getPreviewFiles().length) return;
+  const sdk=await ensureStackBlitzSDK();
+  sdk.openProject(makeStackBlitzProject(),{openFile:'src/App.jsx',view:'preview',terminalHeight:30});
 }
 function showActiveCode(){
   const path=S.activeFile||Object.keys(S.files)[0];

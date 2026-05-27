@@ -16,6 +16,23 @@ Your autonomous AI build crew - chat, brainstorm, and ship apps with 5 AI agents
 
 You can update saved provider keys later from the **AI Keys** tab inside the app.
 
+## GitHub Browser Login
+
+The GitHub tab supports browser sign-in through a Vercel serverless OAuth callback.
+
+To enable it:
+
+1. Create a GitHub OAuth App in GitHub Developer settings
+2. Set the callback URL to `https://YOUR-VERCEL-DOMAIN/api/github-oauth`
+3. Add these environment variables in Vercel:
+   - `GITHUB_CLIENT_ID`
+   - `GITHUB_CLIENT_SECRET`
+4. Redeploy the project
+
+After that, use **Sign in with GitHub** in the app, enter a repository like `owner/repo`, and click **Save repository**.
+
+The app still keeps a personal access token field as a fallback if OAuth is not configured.
+
 ## Your Crew
 
 - **Jordan** - Product Manager. Writes specs, proposes ideas, runs brainstorms
@@ -39,3 +56,5 @@ You can update saved provider keys later from the **AI Keys** tab inside the app
 
 Your AI provider API keys are stored only in your browser's localStorage.
 They are never sent to any server other than their matching provider APIs directly.
+
+GitHub OAuth tokens are also stored in browser localStorage so the app can commit without asking you to sign in every session.

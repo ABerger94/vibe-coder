@@ -590,16 +590,21 @@
     <div class="gh-view">
       <div class="gh-setup">
         <div style="font-size:13px;font-weight:500;margin-bottom:8px">GitHub integration</div>
+        <button class="gh-con-btn" onclick="startGitHubLogin()"><i class="ti ti-brand-github"></i> Sign in with GitHub</button>
+        <div class="gh-hint">Opens GitHub in a browser window. No personal access token paste needed after OAuth is configured in Vercel.</div>
         <div class="gh-field">
-          <div class="gh-lbl">Personal access token</div>
+          <div class="gh-lbl">Personal access token <span style="font-weight:400;text-transform:none;color:#999">(fallback)</span></div>
           <input class="gh-input" id="gh-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-          <div class="gh-hint">GitHub → Settings → Developer settings → Personal access tokens → Generate (repo scope)</div>
+          <div class="gh-hint">Only needed if browser sign-in is not configured.</div>
         </div>
         <div class="gh-row">
           <div style="flex:1"><div class="gh-lbl">Repository</div><input class="gh-input" id="gh-repo" placeholder="yourname/my-app"></div>
           <div style="width:90px"><div class="gh-lbl">Branch</div><input class="gh-input" id="gh-branch" value="main"></div>
         </div>
-        <button class="gh-con-btn" onclick="connectGH()"><i class="ti ti-brand-github"></i> Connect</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="gh-con-btn" onclick="connectGH()"><i class="ti ti-plug-connected"></i> Save repository</button>
+          <button class="gh-con-btn" onclick="disconnectGH()" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)"><i class="ti ti-logout"></i> Disconnect</button>
+        </div>
         <div class="gh-stat" id="gh-stat">Not connected.</div>
       </div>
       <div class="commit-log" id="commit-log"><div class="no-commits" id="no-commits">No commits yet.</div></div>
@@ -616,6 +621,7 @@ const STORAGE_KEY_PASS = 'vc_passHash';
 const STORAGE_KEY_MEM  = 'vc_memory';
 const STORAGE_KEY_PROJECT = 'vc_project';
 const STORAGE_KEY_SETTINGS = 'vc_settings';
+const STORAGE_KEY_GITHUB = 'vc_github';
 
 function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h.toString(36); }
 
@@ -676,6 +682,7 @@ function unlock(){
   loadSettings();
   loadMemoryFromStorage();
   restoreProject();
+  restoreGitHub();
   setTimeout(showWelcome, 400);
 }
 
@@ -713,6 +720,7 @@ window.addEventListener('load', ()=>{
     loadSettings();
     loadMemoryFromStorage();
     restoreProject();
+    restoreGitHub();
     setTimeout(showWelcome, 400);
   } else if(hasAnyProviderKey() && storedPass){
     // Has password — show password field immediately
@@ -783,7 +791,7 @@ const S = {
   activeTurns: 0,
   awaitingUserAction: 0,
   files: {}, commits: [], activeFile: null,
-  gh: { token:'', repo:'', branch:'main', connected:false },
+  gh: { token:'', repo:'', branch:'main', connected:false, user:null },
   memory: { preferences:{}, learnings:[], history:[], buildCount:0, conversationHistory:[] },
   project: { title:'', idea:'', updatedAt:null },
   settings: { buildMode:'guided' },
@@ -1448,7 +1456,75 @@ function downloadAllFiles(){
 async function commitSingle(){ if(!S.activeFile||!S.gh.connected) return; const btn=document.getElementById('commit-btn'); btn.innerHTML='<div class="spin"></div>'; btn.disabled=true; const sha=await commitToGH(S.activeFile,S.files[S.activeFile]?.content||'',`feat: ${S.activeFile}`); if(sha){addCommitEntry([S.activeFile],`feat: ${S.activeFile}`,sha);openFile(S.activeFile);} btn.innerHTML='<i class="ti ti-brand-github"></i>Commit'; btn.disabled=false; }
 
 // ── GITHUB ────────────────────────────────────────────────────────────────────
-async function connectGH(){ const token=document.getElementById('gh-token').value.trim(); const repo=document.getElementById('gh-repo').value.trim(); const branch=document.getElementById('gh-branch').value.trim()||'main'; if(!token||!repo){document.getElementById('gh-stat').textContent='Enter token and repo.';return;} document.getElementById('gh-stat').textContent='Verifying...'; try{ const r=await fetch(`https://api.github.com/repos/${repo}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}}); const d=await r.json(); if(r.ok){S.gh={token,repo,branch,connected:true}; document.getElementById('gh-stat').innerHTML=`<span style="color:#27500A">Connected to <strong>${esc(d.full_name)}</strong></span>`; document.getElementById('gh-tb').className='tb-btn on'; document.getElementById('gh-tb-lbl').textContent=repo.split('/')[1]||repo; addLearning('GitHub: '+repo); addBubble('leo',`GitHub connected to ${repo}! I'll auto-commit after every build.`); }else{document.getElementById('gh-stat').textContent='Error: '+d.message;} }catch(e){document.getElementById('gh-stat').textContent='Network error.';} }
+function saveGitHub(){
+  try{ localStorage.setItem(STORAGE_KEY_GITHUB,JSON.stringify({token:S.gh.token,repo:S.gh.repo,branch:S.gh.branch,user:S.gh.user})); }catch(e){}
+}
+function updateGitHubUI(){
+  const repoName=S.gh.repo?.split('/')[1]||S.gh.repo||'GitHub';
+  document.getElementById('gh-tb').className='tb-btn'+(S.gh.connected?' on':'');
+  document.getElementById('gh-tb-lbl').textContent=S.gh.connected?repoName:'GitHub';
+  document.getElementById('gh-repo').value=S.gh.repo||document.getElementById('gh-repo').value||'';
+  document.getElementById('gh-branch').value=S.gh.branch||'main';
+}
+function restoreGitHub(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY_GITHUB);
+    if(!raw) return;
+    const gh=JSON.parse(raw);
+    S.gh={...S.gh,...gh,connected:false};
+    updateGitHubUI();
+    if(S.gh.token&&S.gh.repo) connectGH(S.gh.token,true);
+    else if(S.gh.token) document.getElementById('gh-stat').innerHTML=`<span style="color:#27500A">Signed in${S.gh.user?.login?' as '+esc(S.gh.user.login):''}. Enter a repository and click Save repository.</span>`;
+  }catch(e){}
+}
+function startGitHubLogin(){
+  document.getElementById('gh-stat').textContent='Opening GitHub sign-in...';
+  const popup=window.open('/api/github-oauth','vibeCoderGitHub','width=720,height=760');
+  if(!popup) document.getElementById('gh-stat').textContent='Popup blocked. Allow popups for this site and try again.';
+}
+window.addEventListener('message',(event)=>{
+  if(event.origin!==window.location.origin) return;
+  const data=event.data||{};
+  if(data.type!=='vibe-coder-github-oauth') return;
+  if(data.error){ document.getElementById('gh-stat').textContent=data.error; return; }
+  S.gh.token=data.token||'';
+  S.gh.user=data.user||null;
+  saveGitHub();
+  document.getElementById('gh-token').value='';
+  document.getElementById('gh-stat').innerHTML=`<span style="color:#27500A">Signed in${S.gh.user?.login?' as '+esc(S.gh.user.login):''}. Enter a repository and click Save repository.</span>`;
+  if(document.getElementById('gh-repo').value.trim()) connectGH(S.gh.token);
+});
+function disconnectGH(){
+  S.gh={token:'',repo:'',branch:'main',connected:false,user:null};
+  localStorage.removeItem(STORAGE_KEY_GITHUB);
+  document.getElementById('gh-token').value='';
+  document.getElementById('gh-repo').value='';
+  document.getElementById('gh-branch').value='main';
+  document.getElementById('gh-stat').textContent='Disconnected.';
+  updateGitHubUI();
+}
+async function connectGH(tokenOverride,silent){
+  const token=tokenOverride||S.gh.token||document.getElementById('gh-token').value.trim();
+  const repo=document.getElementById('gh-repo').value.trim();
+  const branch=document.getElementById('gh-branch').value.trim()||'main';
+  if(!token){document.getElementById('gh-stat').textContent='Sign in with GitHub, or enter a fallback token.';return;}
+  if(!repo){document.getElementById('gh-stat').textContent='Enter a repository like yourname/my-app.';return;}
+  document.getElementById('gh-stat').textContent='Verifying repository access...';
+  try{
+    const r=await fetch(`https://api.github.com/repos/${repo}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});
+    const d=await r.json();
+    if(r.ok){
+      S.gh={...S.gh,token,repo,branch,connected:true};
+      saveGitHub(); updateGitHubUI();
+      document.getElementById('gh-stat').innerHTML=`<span style="color:#27500A">Connected to <strong>${esc(d.full_name)}</strong>${S.gh.user?.login?' as '+esc(S.gh.user.login):''}</span>`;
+      addLearning('GitHub: '+repo);
+      if(!silent) addBubble('leo',`GitHub connected to ${repo}! I'll auto-commit after every build.`);
+    }else{
+      S.gh.connected=false; updateGitHubUI();
+      document.getElementById('gh-stat').textContent='Error: '+(d.message||'Could not access repository.');
+    }
+  }catch(e){document.getElementById('gh-stat').textContent='Network error.';}
+}
 async function commitToGH(path,content,msg){ if(!S.gh.connected) return null; try{ const {token,repo,branch}=S.gh; const headers={Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'}; let sha=null; const gr=await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,{headers}); if(gr.ok){const gd=await gr.json();sha=gd.sha;} const body={message:msg,content:btoa(unescape(encodeURIComponent(content))),branch}; if(sha)body.sha=sha; const pr=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{method:'PUT',headers,body:JSON.stringify(body)}); const pd=await pr.json(); return pr.ok?pd.commit?.sha?.substring(0,7)||'ok':null; }catch(e){return null;} }
 function addCommitEntry(files,msg,sha){ S.commits.push({files,msg,sha,ts:new Date()}); document.getElementById('commits-badge').textContent=S.commits.length; document.getElementById('no-commits')?.remove(); const log=document.getElementById('commit-log'); const d=document.createElement('div'); d.className='commit-item'; d.innerHTML=`<span class="c-sha">${esc(sha)}</span><div><div class="c-msg">${esc(msg)}</div><div class="c-meta">${new Date().toLocaleTimeString()} · ${files.length} file${files.length!==1?'s':''}</div><div class="c-files">${files.map(f=>`<span class="c-fb">${esc(f)}</span>`).join('')}</div></div>`; log.insertBefore(d,log.firstChild); }
 

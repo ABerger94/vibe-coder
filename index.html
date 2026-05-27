@@ -42,7 +42,8 @@
         .b-dep .btext { background: #061a12; border-color: #1a7a5a; }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; height: 100dvh; overflow: hidden; }
 
   /* ── LOCK SCREEN ─────────────────────────────────────── */
   #lock-screen {
@@ -102,7 +103,7 @@
   .tbadge { background: var(--bg2); border-radius: 10px; padding: 1px 5px; font-size: 10px; color: var(--text3); }
   .tab.active .tbadge { background: var(--blue-light); color: var(--blue); }
 
-  .view { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+  .view { display: none; flex: 1 1 auto; flex-direction: column; overflow: hidden; min-height: 0; }
   .view.active { display: flex; }
 
   /* CHAT LAYOUT */
@@ -136,7 +137,7 @@
   .ctx-clear { font-size: 10px; color: var(--text3); cursor: pointer; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
   .ctx-clear:hover { background: var(--bg2); color: var(--text); }
 
-  .messages { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; max-height: 100%; }
+  .messages { flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 18px; display: flex; flex-direction: column; gap: 6px; min-height: 0; max-height: 100%; scroll-padding-bottom: 18px; }
   .messages::-webkit-scrollbar { width: 3px; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -179,7 +180,7 @@
   .typing-dots span:nth-child(3) { animation-delay: .4s; }
   @keyframes tdot { 0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1} }
 
-  .proposal { border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: hidden; margin-left: 34px; animation: fadeUp .2s ease; }
+  .proposal { border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: visible; margin-left: 34px; animation: fadeUp .2s ease; flex-shrink: 0; }
   .proposal-hdr { padding: 9px 12px; background: var(--bg2); border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; }
   .idea-item { padding: 10px 12px; border-bottom: 0.5px solid var(--border); display: flex; gap: 9px; cursor: pointer; transition: background .12s; }
   .idea-item:last-child { border-bottom: none; }
@@ -304,6 +305,15 @@
   .c-files { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
   .c-fb { font-size: 10px; background: var(--blue-light); color: var(--blue); padding: 1px 6px; border-radius: 10px; font-family: monospace; }
   .no-commits { padding: 2rem; text-align: center; font-size: 12px; color: var(--text3); }
+
+  @media (max-width: 720px) {
+    .chat-layout { flex-direction: column; }
+    .crew-panel { display: none; }
+    .proposal, .cp-block, .par-block, .done-block { margin-left: 0; }
+    .bcontent { max-width: calc(100% - 34px); }
+    .quick-prompts { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .input-area { padding: 8px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -736,6 +746,7 @@ function setAgent(id,mode,status){ document.getElementById('av-'+id)?.classList.
 function clearCtx(){ document.getElementById('ctx-val').textContent='Open conversation — ask anything'; document.getElementById('ctx-clear-btn').style.display='none'; }
 function setCtx(txt){ document.getElementById('ctx-val').textContent=txt; document.getElementById('ctx-clear-btn').style.display='inline'; }
 function scrollMsgs(){ const m=document.getElementById('messages'); if(!m) return; requestAnimationFrame(()=>{ m.scrollTop=m.scrollHeight; }); }
+function scrollIntoMessages(el){ requestAnimationFrame(()=>{ el?.scrollIntoView({block:'nearest',inline:'nearest'}); }); }
 function updateComposerState(){
   const locked=S.activeTurns>0 && S.awaitingUserAction===0;
   const btn=document.getElementById('send-btn');
@@ -778,7 +789,7 @@ function addIdeasProposal(ideas, subtext){
     const d=document.createElement('div'); d.className='proposal';
     const rows=ideas.map((idea,i)=>`<div class="idea-item" id="${uid}i${i}" role="button" tabindex="0" onclick="approveIdea('${uid}',${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();approveIdea('${uid}',${i})}"><div class="idea-num" id="${uid}n${i}">${i+1}</div><div class="idea-body"><div class="idea-title">${esc(idea.title)}</div><div class="idea-desc">${esc(idea.description)}</div><div class="idea-tags">${(idea.tags||[]).map(t=>`<span class="idea-tag">${esc(t)}</span>`).join('')}</div></div></div>`).join('');
     d.innerHTML=`<div class="proposal-hdr"><i class="ti ti-bulb" style="font-size:15px;color:#185FA5"></i>${esc(subtext||'Pick an idea to build')}</div><div>${rows}</div><div class="proposal-acts"><button class="pabtn pabtn-go" id="${uid}go" onclick="approveIdea('${uid}')"><i class="ti ti-player-play"></i>Build selected</button><button class="pabtn pabtn-sec" onclick="moreIdeas('${uid}')"><i class="ti ti-refresh"></i>More ideas</button><button class="pabtn pabtn-sec" onclick="dismissIdeas('${uid}')">Just browsing</button></div>`;
-    msgs.appendChild(d); scrollMsgs(); d._ideas=ideas; d._resolve=resolve; window['_ip_'+uid]=d; beginAwaitingUserAction();
+    msgs.appendChild(d); scrollMsgs(); scrollIntoMessages(d); d._ideas=ideas; d._resolve=resolve; window['_ip_'+uid]=d; beginAwaitingUserAction();
   });
 }
 function selIdea(uid,i){ const c=window['_ip_'+uid]; if(!c||c._resolve===null) return; c._sel=i; c.querySelectorAll('.idea-item').forEach((el,idx)=>el.classList.toggle('sel',idx===i)); }

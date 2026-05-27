@@ -249,9 +249,9 @@
   .ftree { width: 180px; border-right: 0.5px solid var(--border); overflow-y: auto; flex-shrink: 0; }
   .ftree-hdr { padding: 6px 12px; font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: 0; background: var(--bg); }
   .ft-actions { display: flex; align-items: center; gap: 5px; }
-  .ft-zip { padding: 2px 6px; border-radius: 5px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 3px; text-transform: none; letter-spacing: 0; }
-  .ft-zip:hover:not(:disabled) { border-color: var(--border2); color: var(--text); }
-  .ft-zip:disabled { opacity: .45; cursor: not-allowed; }
+  .ft-action { padding: 2px 6px; border-radius: 5px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 3px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+  .ft-action:hover:not(:disabled) { border-color: var(--border2); color: var(--text); }
+  .ft-action:disabled { opacity: .45; cursor: not-allowed; }
   .ft-folder { padding: 5px 12px; font-size: 11px; font-weight: 500; color: var(--text2); display: flex; align-items: center; gap: 5px; margin-top: 3px; }
   .ft-file { padding: 4px 22px; font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 5px; cursor: pointer; transition: background .1s; }
   .ft-file:hover { background: var(--bg2); }
@@ -270,6 +270,9 @@
   .code-body { flex: 1; overflow: auto; padding: 12px; background: var(--bg2); }
   .code-body pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.7; color: var(--text2); white-space: pre-wrap; word-break: break-all; }
   .no-file { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 7px; color: var(--text3); font-size: 12px; padding: 3rem; text-align: center; }
+  .preview-viewer { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+  .preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+  .preview-note { font-size: 11px; color: var(--text3); margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
   /* MEMORY */
   .mem-view { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -470,7 +473,8 @@
         <div class="ftree-hdr">
           <span>Files</span>
           <div class="ft-actions">
-            <button class="ft-zip" id="zip-btn" onclick="downloadAllFiles()" disabled title="Download all files as a zip"><i class="ti ti-file-zip"></i>Zip</button>
+            <button class="ft-action" id="preview-btn" onclick="showPreview()" disabled title="Run a live preview from the generated files"><i class="ti ti-player-play"></i>Preview</button>
+            <button class="ft-action" id="zip-btn" onclick="downloadAllFiles()" disabled title="Download all files as a zip"><i class="ti ti-file-zip"></i>Zip</button>
             <span id="file-count" style="font-size:10px">0</span>
           </div>
         </div>
@@ -484,10 +488,22 @@
             <div class="code-acts">
               <button class="cta" onclick="copyFile()"><i class="ti ti-copy"></i> Copy</button>
               <button class="cta" onclick="dlFile()"><i class="ti ti-download"></i> Download</button>
+              <button class="cta" id="preview-file-btn" onclick="showPreview()" style="display:none"><i class="ti ti-player-play"></i> Preview</button>
               <button class="cta primary" id="commit-btn" onclick="commitSingle()" style="display:none"><i class="ti ti-brand-github"></i> Commit</button>
             </div>
           </div>
           <div class="code-body"><pre id="cv-code"></pre></div>
+        </div>
+        <div id="preview-viewer" class="preview-viewer">
+          <div class="code-tb">
+            <span class="code-fn">App preview</span>
+            <span class="preview-note" id="preview-note"></span>
+            <div class="code-acts">
+              <button class="cta" onclick="showActiveCode()"><i class="ti ti-code"></i> Code</button>
+              <button class="cta" onclick="showPreview()"><i class="ti ti-refresh"></i> Refresh</button>
+            </div>
+          </div>
+          <iframe id="preview-frame" class="preview-frame" sandbox="allow-scripts"></iframe>
         </div>
       </div>
     </div>
@@ -1000,7 +1016,10 @@ async function handleBuild(text){ setCtx('Building: '+text.substring(0,40)); awa
 // ── BUILD PIPELINE ────────────────────────────────────────────────────────────
 async function runBuild(idea, ideaObj){
   S.memory.buildCount++; setStatus('Building...','live'); const memCtx=buildMemCtx();
-  S.files={}; renderTree(); updateFileCounts();
+  S.files={}; S.activeFile=null; renderTree(); updateFileCounts();
+  document.getElementById('code-viewer').style.display='none';
+  document.getElementById('preview-viewer').style.display='none';
+  document.getElementById('no-file').style.display='flex';
 
   setAgent('jordan','thinking','Writing spec...');
   const st=addTyping('jordan');
@@ -1072,6 +1091,7 @@ async function runBuild(idea, ideaObj){
   doneEl.innerHTML=`<div class="done-title"><i class="ti ti-confetti"></i>Build #${S.memory.buildCount} complete!</div><div class="done-sub">${built.length} components in parallel · ${Object.keys(S.files).length} files · ${S.gh.connected?'Committed to '+S.gh.repo:'Files tab ready'} · Crew learned from this one</div>`;
   document.getElementById('messages').appendChild(doneEl); scrollMsgs();
   switchTab('files');
+  if(getPreviewFiles().length) showPreview();
 
   setTimeout(()=>{ addBubble('jordan',`Build #${S.memory.buildCount} done! What do you want to tackle next?`,'Thinking about what might interest them next...'); },1000);
 }
@@ -1082,7 +1102,9 @@ function updateFileCounts(){
   document.getElementById('files-badge').textContent=n;
   document.getElementById('file-count').textContent=n;
   const zipBtn=document.getElementById('zip-btn');
+  const previewBtn=document.getElementById('preview-btn');
   if(zipBtn) zipBtn.disabled=n===0;
+  if(previewBtn) previewBtn.disabled=!getPreviewFiles().length;
 }
 function addFile(path,content,agent){ S.files[path]={content,agent,ts:new Date()}; renderTree(); updateFileCounts(); }
 function renderTree(){
@@ -1093,9 +1115,119 @@ function renderTree(){
   Object.keys(folders).filter(f=>f!=='').forEach(folder=>{ html+=`<div class="ft-folder"><i class="ti ti-folder" style="font-size:11px"></i>${esc(folder)}/</div>`; (folders[folder]||[]).forEach(p=>{ const fname=p.split('/').pop(); const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')" style="padding-left:28px"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(fname)}</div>`; }); });
   root.innerHTML=html;
 }
-function openFile(path){ S.activeFile=path; const f=S.files[path]; if(!f) return; document.getElementById('no-file').style.display='none'; const cv=document.getElementById('code-viewer'); cv.style.display='flex'; document.getElementById('cv-fn').textContent=path; document.getElementById('cv-code').textContent=f.content; const committed=S.commits.some(c=>c.files.includes(path)); document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none'; renderTree(); }
+function openFile(path){ S.activeFile=path; const f=S.files[path]; if(!f) return; document.getElementById('no-file').style.display='none'; document.getElementById('preview-viewer').style.display='none'; const cv=document.getElementById('code-viewer'); cv.style.display='flex'; document.getElementById('cv-fn').textContent=path; document.getElementById('cv-code').textContent=f.content; const committed=S.commits.some(c=>c.files.includes(path)); document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none'; document.getElementById('preview-file-btn').style.display=getPreviewFiles().length?'flex':'none'; renderTree(); }
 function copyFile(){ if(S.activeFile) navigator.clipboard?.writeText(S.files[S.activeFile]?.content||''); }
 function dlFile(){ if(!S.activeFile) return; const b=new Blob([S.files[S.activeFile]?.content||''],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=S.activeFile.split('/').pop(); a.click(); }
+function getPreviewFiles(){
+  const codeExt=/\.(jsx|tsx|js|ts)$/i;
+  const skip=/(^|\/)(main|index|vite\.config|tailwind\.config|postcss\.config)\.(jsx|tsx|js|ts)$/i;
+  return Object.keys(S.files).filter(p=>codeExt.test(p)&&!skip.test(p)&&looksLikeComponent(S.files[p]?.content||''));
+}
+function looksLikeComponent(code){
+  return /<[A-Za-z][^>]*>|export\s+default|function\s+[A-Z]|const\s+[A-Z][\w$]*\s*=/.test(String(code||''));
+}
+function previewNameFromPath(path){
+  const base=(path.split('/').pop()||'PreviewApp').replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9_$]/g,'');
+  return (/^[A-Za-z_$]/.test(base)?base:'PreviewApp').replace(/^[a-z]/,c=>c.toUpperCase())||'PreviewApp';
+}
+function previewComponentName(path,code){
+  const src=String(code||'');
+  const direct=src.match(/export\s+default\s+(?:function|class)\s+([A-Za-z_$][\w$]*)/)||
+               src.match(/(?:function|class)\s+([A-Z][\w$]*)/)||
+               src.match(/(?:const|let|var)\s+([A-Z][\w$]*)\s*=/)||
+               src.match(/export\s+default\s+([A-Za-z_$][\w$]*)/);
+  return direct?direct[1]:previewNameFromPath(path);
+}
+function stripCodeFence(code){
+  return String(code||'').trim().replace(/^```[a-zA-Z0-9_-]*\s*/,'').replace(/\s*```$/,'');
+}
+function normalizePreviewCode(path,code,name){
+  let out=stripCodeFence(code);
+  out=out.replace(/^\s*import\s+[^;\n]+;?\s*$/gm,'');
+  out=out.replace(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/g,'function $1');
+  out=out.replace(/export\s+default\s+function\s*\(/g,`function ${name}(`);
+  out=out.replace(/export\s+default\s+class\s+([A-Za-z_$][\w$]*)/g,'class $1');
+  out=out.replace(/export\s+default\s+class\s*/g,`class ${name} `);
+  out=out.replace(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/g,'');
+  out=out.replace(/export\s+default\s*\(/g,`const ${name}=(`);
+  out=out.replace(/export\s+default\s+</g,`const ${name}=()=> <`);
+  out=out.replace(/export\s+{[^}]+};?/g,'');
+  out=out.replace(/export\s+(const|let|var|function|class)\s+/g,'$1 ');
+  return `// ${path}\n${out}\nif (typeof ${name} !== 'undefined') window.__previewComponents.push({name:${JSON.stringify(name)}, path:${JSON.stringify(path)}, component:${name}});`;
+}
+function scriptSafe(s){ return String(s||'').replace(/<\/script/gi,'<\\/script'); }
+function previewSourceDoc(){
+  const paths=getPreviewFiles().sort((a,b)=>{
+    const appA=/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(a), appB=/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(b);
+    if(appA!==appB) return appA?1:-1;
+    return a.localeCompare(b);
+  });
+  const entries=paths.map(path=>({path, name:previewComponentName(path,S.files[path]?.content||''), code:S.files[path]?.content||''}));
+  const appRoot=entries.find(e=>/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(e.path));
+  const root=appRoot||entries[entries.length-1];
+  const appCode=entries.map(e=>normalizePreviewCode(e.path,e.code,e.name)).join('\n\n');
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#111827}.vc-preview-error{padding:18px;font-size:13px;line-height:1.6;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap}.vc-preview-empty{padding:32px;color:#6b7280;font-size:14px}</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+<script type="text/babel" data-presets="typescript,react">
+const {useState,useEffect,useMemo,useCallback,useRef,useReducer,useContext,createContext,Fragment}=React;
+var IconStub=({className='',...props}) => <span className={className} aria-hidden="true" style={{display:'inline-block',width:'1em',height:'1em',border:'1.5px solid currentColor',borderRadius:'999px',verticalAlign:'-0.125em'}} {...props}></span>;
+var Search=IconStub,Menu=IconStub,X=IconStub,Star=IconStub,Heart=IconStub,User=IconStub,Users=IconStub,Settings=IconStub,Plus=IconStub,Minus=IconStub,Trash=IconStub,Edit=IconStub,Save=IconStub,Download=IconStub,Upload=IconStub,ArrowRight=IconStub,ArrowLeft=IconStub,ChevronDown=IconStub,ChevronUp=IconStub,Check=IconStub,AlertCircle=IconStub,Info=IconStub,Home=IconStub,Calendar=IconStub,Clock=IconStub,Mail=IconStub,Phone=IconStub,MapPin=IconStub,Sparkles=IconStub,Zap=IconStub,Play=IconStub,Pause=IconStub,ShoppingCart=IconStub;
+var Button=({children,className='',...props}) => <button className={'inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white '+className} {...props}>{children}</button>;
+var Card=({children,className='',...props}) => <div className={'rounded-lg border border-slate-200 bg-white '+className} {...props}>{children}</div>;
+var CardHeader=({children,className='',...props}) => <div className={'p-4 '+className} {...props}>{children}</div>;
+var CardTitle=({children,className='',...props}) => <h3 className={'text-base font-semibold '+className} {...props}>{children}</h3>;
+var CardDescription=({children,className='',...props}) => <p className={'text-sm text-slate-500 '+className} {...props}>{children}</p>;
+var CardContent=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
+var CardFooter=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
+var Badge=({children,className='',...props}) => <span className={'inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 '+className} {...props}>{children}</span>;
+var Input=({className='',...props}) => <input className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
+var Textarea=({className='',...props}) => <textarea className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
+var Label=({children,className='',...props}) => <label className={'text-sm font-medium '+className} {...props}>{children}</label>;
+window.__previewComponents=[];
+try {
+${scriptSafe(appCode)}
+  const rootName=${JSON.stringify(root?.name||'')};
+  const renderAll=${appRoot?'false':'true'};
+  const selected=window.__previewComponents.find(c=>c.name===rootName)||window.__previewComponents[window.__previewComponents.length-1];
+  function PreviewShell(){
+    if(!selected) return <div className="vc-preview-empty">No previewable React component was generated yet.</div>;
+    if(renderAll) return <div className="min-h-screen bg-slate-50 p-4 space-y-4">{window.__previewComponents.map(item=>{ const Item=item.component; return <section key={item.path} className="bg-white border border-slate-200 rounded-lg overflow-hidden"><div className="px-3 py-2 text-xs font-medium text-slate-500 border-b border-slate-200">{item.name}</div><Item /></section>; })}</div>;
+    const Component=selected.component;
+    return <Component />;
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<PreviewShell />);
+} catch (err) {
+  document.getElementById('root').innerHTML='<div class="vc-preview-error">Preview failed: '+String(err && (err.stack||err.message) || err).replace(/[&<>]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[ch]))+'</div>';
+}
+<\/script>
+</body>
+</html>`;
+}
+function showPreview(){
+  const paths=getPreviewFiles();
+  document.getElementById('no-file').style.display='none';
+  document.getElementById('code-viewer').style.display='none';
+  const pv=document.getElementById('preview-viewer');
+  const frame=document.getElementById('preview-frame');
+  pv.style.display='flex';
+  document.getElementById('preview-note').textContent=paths.length?`${paths.length} generated component${paths.length===1?'':'s'}`:'No previewable React files';
+  frame.srcdoc=previewSourceDoc();
+}
+function showActiveCode(){
+  const path=S.activeFile||Object.keys(S.files)[0];
+  if(path) openFile(path);
+}
 function textBytes(s){ return new TextEncoder().encode(String(s||'')); }
 const ZIP_CRC_TABLE=(()=>{ const t=[]; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
 function crc32(bytes){ let c=0xFFFFFFFF; for(const b of bytes) c=ZIP_CRC_TABLE[(c^b)&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }

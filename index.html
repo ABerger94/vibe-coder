@@ -1121,6 +1121,25 @@ async function handleFeedback(text){
 async function handleBuild(text){ setCtx('Building: '+text.substring(0,40)); await runBuild(text); }
 
 // ── BUILD PIPELINE ────────────────────────────────────────────────────────────
+function parseJSONish(raw,fallback){
+  try{return JSON.parse(raw);}catch{const m=String(raw||'').match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0]);}catch{}}
+  return fallback;
+}
+function archSummary(arch){
+  return `${arch.overview||'Here is the current blueprint.'}\n\n${(arch.components||[]).length} components:\n${(arch.components||[]).map(c=>`• ${c.name} — ${c.description}`).join('\n')}`;
+}
+async function reviseBuiltFiles(built,spec,feedback,memCtx){
+  setAgent('kai','thinking','Applying requested changes...');
+  addBubble('kai',`I’ll update the generated files for: ${feedback}`,'Staying in the code task until you approve it.');
+  const updated=await Promise.all(built.map(async(comp)=>{
+    const code=await callClaude(`You are Kai, lead builder. Revise the component code. Output ONLY complete code, no explanation, no fences.`,`User requested changes before shipping:\n${feedback}\n\nSpec:\n${spec}\n\nStyle prefs: ${memCtx}\n\nFile: ${comp.file}\nComponent: ${comp.name} — ${comp.description}\n\nCurrent code:\n${comp.code}\n\nReturn the full updated React + Tailwind component.`,1200);
+    addFile(comp.file,code,'Kai');
+    return {...comp,code};
+  }));
+  setAgent('kai','on','Builder');
+  addBubble('kai','I applied those changes to the generated files. Priya will review the revised version next.',null,false,'User-requested code changes applied');
+  return updated;
+}
 async function runBuild(idea, ideaObj){
   S.memory.buildCount++; setStatus('Building...','live'); const memCtx=buildMemCtx();
   S.files={}; S.activeFile=null; S.project={title:ideaObj?.title||idea.substring(0,60),idea,updatedAt:new Date().toISOString()}; renderTree(); updateFileCounts(); saveProject();
@@ -1130,12 +1149,19 @@ async function runBuild(idea, ideaObj){
 
   setAgent('jordan','thinking','Writing spec...');
   const st=addTyping('jordan');
-  const spec=await callClaude(`You are Jordan, a PM. Write clear product specs. Plain English, no jargon.`,`Spec for: "${idea}"\nMemory: ${memCtx}\n\nFormat:\n✦ What it is\n✦ Who it's for\n✦ Core features (4-6)\n✦ The feel\n✦ What makes it special\n\nMax 200 words.`,900);
+  let spec=await callClaude(`You are Jordan, a PM. Write clear product specs. Plain English, no jargon.`,`Spec for: "${idea}"\nMemory: ${memCtx}\n\nFormat:\n✦ What it is\n✦ Who it's for\n✦ Core features (4-6)\n✦ The feel\n✦ What makes it special\n\nMax 200 words.`,900);
   st.remove(); setAgent('jordan','on'); addBubble('jordan',spec,'Writing spec based on your history...');
 
   if(S.settings.buildMode==='guided'){
-    const specFb=await addCP('Does this match your vision?','Approve or give feedback.');
-    if(specFb) learnFromFeedback(specFb);
+    let specFb=await addCP('Does this match your vision?','Approve or send changes. Jordan will revise this spec before Maya starts.');
+    while(specFb){
+      learnFromFeedback(specFb);
+      setAgent('jordan','thinking','Revising spec...');
+      const rst=addTyping('jordan');
+      spec=await callClaude(`You are Jordan, a PM. Revise the product spec based on user feedback. Plain English, no jargon.`,`Original idea: "${idea}"\nCurrent spec:\n${spec}\n\nUser requested changes:\n${specFb}\n\nReturn the revised spec in the same format. Max 220 words.`,900);
+      rst.remove(); setAgent('jordan','on'); addBubble('jordan',spec,'Revised from your change request.');
+      specFb=await addCP('Approve revised spec?','Approve to hand off to Maya, or send another change.');
+    }
   } else {
     addBubble('jordan','Quick mode is on, so I’m skipping approval stops and moving straight into the blueprint.');
   }
@@ -1144,13 +1170,22 @@ async function runBuild(idea, ideaObj){
   const at=addTyping('maya');
   const archRaw=await callClaude(`You are Maya, architect. Output ONLY valid JSON.`,`Design components for: "${idea}"\nSpec: ${spec}\nPrefs: ${memCtx}\n\nOutput:\n{"overview":"2 sentence summary","thought":"reasoning","components":[{"id":"c1","name":"Name","file":"src/components/Name.jsx","description":"what it does"}]}\n\n3-5 components. JSON only.`,900);
   let arch={overview:'',thought:'',components:[{id:'c1',name:'App',file:'src/App.jsx',description:'Main app'}]};
-  try{arch=JSON.parse(archRaw);}catch{const m=archRaw.match(/\{[\s\S]*\}/);if(m)try{arch=JSON.parse(m[0]);}catch{}}
+  arch=parseJSONish(archRaw,arch);
   at.remove(); setAgent('maya','on');
-  addBubble('maya',`${arch.overview}\n\n${arch.components.length} components:\n${arch.components.map(c=>`• ${c.name} — ${c.description}`).join('\n')}`,arch.thought||null,false,arch.components.length>2?`${arch.components.length}-component structure`:'');
+  addBubble('maya',archSummary(arch),arch.thought||null,false,arch.components.length>2?`${arch.components.length}-component structure`:'');
 
   if(S.settings.buildMode==='guided'){
-    const archFb=await addCP('Happy with the blueprint?','Approve to start coding or request changes.');
-    if(archFb) learnFromFeedback(archFb);
+    let archFb=await addCP('Happy with the blueprint?','Approve to let Kai start coding, or send changes for Maya.');
+    while(archFb){
+      learnFromFeedback(archFb);
+      setAgent('maya','thinking','Revising blueprint...');
+      const rat=addTyping('maya');
+      const revisedRaw=await callClaude(`You are Maya, architect. Revise the architecture. Output ONLY valid JSON.`,`Original idea: "${idea}"\nApproved spec:\n${spec}\n\nCurrent blueprint JSON:\n${JSON.stringify(arch)}\n\nUser requested changes:\n${archFb}\n\nReturn this shape only:\n{"overview":"2 sentence summary","thought":"reasoning","components":[{"id":"c1","name":"Name","file":"src/components/Name.jsx","description":"what it does"}]}\n\n3-5 components. JSON only.`,900);
+      arch=parseJSONish(revisedRaw,arch);
+      rat.remove(); setAgent('maya','on');
+      addBubble('maya',archSummary(arch),arch.thought||'Revised blueprint from your change request.',false,arch.components.length>2?`${arch.components.length}-component structure`:'');
+      archFb=await addCP('Approve revised blueprint?','Approve to hand off to Kai, or send another change.');
+    }
   }
 
   setAgent('kai','thinking','Spawning parallel builders...');
@@ -1161,7 +1196,7 @@ async function runBuild(idea, ideaObj){
   parBlock.innerHTML=`<div class="par-hdr"><i class="ti ti-topology-star"></i>${arch.components.length} agents running in parallel</div><div class="par-grid">${pbCols}</div>`;
   document.getElementById('messages').appendChild(parBlock); scrollMsgs();
 
-  const built=await Promise.all(arch.components.map(async(comp)=>{
+  let built=await Promise.all(arch.components.map(async(comp)=>{
     const code=await callClaude(`You are a sub-builder. Write a complete React component. Output ONLY code — no explanation, no fences.`,`Build: ${comp.name} (${comp.description})\nSpec: ${spec}\nStyle prefs: ${memCtx}\n\nComplete React + Tailwind component. Beautiful, functional, production-ready.`,900);
     document.getElementById('pbdot-'+comp.id).className='pb-dot done';
     document.getElementById('pbst-'+comp.id).textContent='Done ✓';
@@ -1174,16 +1209,25 @@ async function runBuild(idea, ideaObj){
   addFile('index.css','@tailwind base;\n@tailwind components;\n@tailwind utilities;','System');
   addFile('README.md',`# ${idea.substring(0,40)}\n\nBuilt with Vibe Coder.\n\n## Start\n\`\`\`\nnpm install && npm run dev\n\`\`\`\n\n## Components\n${built.map(c=>`- **${c.name}** — ${c.description}`).join('\n')}\n`,'System');
 
-  setAgent('priya','thinking','Reviewing...');
-  const rt=addTyping('priya');
-  const allCode=built.map(c=>`// ${c.file}\n${c.code}`).join('\n---\n').substring(0,3000);
-  const review=await callClaude(`You are Priya, reviewer. Plain English, no jargon.`,`Review ${built.length} React components.\n${allCode}\n\nFormat:\n⭐ Score: X/10\n✅ What's great\n⚠️ Watch out for\n💡 Quick wins\n🧠 Learned for next time\n🟢 Verdict\n\nMax 200 words.`,900);
-  const lm=review.match(/🧠[^\n]*\n([^\n]+)/); const ln=lm?lm[1].trim():null;
-  if(ln) addLearning('Priya: '+ln);
-  rt.remove(); setAgent('priya','on'); addBubble('priya',review,'Reviewing all components...',false,ln||null);
+  let codeApproved=false;
+  while(!codeApproved){
+    setAgent('priya','thinking','Reviewing...');
+    const rt=addTyping('priya');
+    const allCode=built.map(c=>`// ${c.file}\n${c.code}`).join('\n---\n').substring(0,3000);
+    const review=await callClaude(`You are Priya, reviewer. Plain English, no jargon.`,`Review ${built.length} React components.\n${allCode}\n\nFormat:\n⭐ Score: X/10\n✅ What's great\n⚠️ Watch out for\n💡 Quick wins\n🧠 Learned for next time\n🟢 Verdict\n\nMax 200 words.`,900);
+    const lm=review.match(/🧠[^\n]*\n([^\n]+)/); const ln=lm?lm[1].trim():null;
+    if(ln) addLearning('Priya: '+ln);
+    rt.remove(); setAgent('priya','on'); addBubble('priya',review,'Reviewing all components...',false,ln||null);
 
-  const codeFb=await addCP('Any changes before shipping?','Approve to commit, or request edits.');
-  if(codeFb) learnFromFeedback(codeFb);
+    if(S.settings.buildMode!=='guided'){ codeApproved=true; break; }
+    const codeFb=await addCP('Approve code for shipping?','Approve to let Leo commit/finish, or send changes for Kai to apply first.');
+    if(codeFb){
+      learnFromFeedback(codeFb);
+      built=await reviseBuiltFiles(built,spec,codeFb,memCtx);
+    } else {
+      codeApproved=true;
+    }
+  }
 
   setAgent('leo','thinking','Shipping...');
   const dt=addTyping('leo');

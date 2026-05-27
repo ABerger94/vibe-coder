@@ -232,9 +232,13 @@
   .done-sub { font-size: 11px; color: #0F6E56; line-height: 1.5; }
 
   .input-area { padding: 10px 12px; border-top: 0.5px solid var(--border); flex-shrink: 0; }
+  .compose-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
   .quick-prompts { display: flex; gap: 5px; margin-bottom: 7px; flex-wrap: wrap; }
   .qp { padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--border); font-size: 11px; color: var(--text2); cursor: pointer; background: var(--bg); transition: all .12s; white-space: nowrap; }
   .qp:hover { border-color: var(--border2); color: var(--text); background: var(--bg2); }
+  .mode-toggle { display: inline-flex; border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); flex-shrink: 0; }
+  .mode-btn { border: 0; background: transparent; color: var(--text2); padding: 4px 8px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .mode-btn.active { background: var(--blue-light); color: var(--blue); font-weight: 500; }
   .input-row { display: flex; gap: 8px; align-items: flex-end; }
   .chat-ta { flex: 1; padding: 9px 11px; border: 0.5px solid var(--border); border-radius: var(--radius-lg); font-size: 13px; background: var(--bg); color: var(--text); font-family: inherit; resize: none; min-height: 38px; max-height: 120px; line-height: 1.5; transition: border-color .15s; }
   .chat-ta:focus { outline: none; border-color: var(--blue-mid); }
@@ -252,6 +256,9 @@
   .ft-action { padding: 2px 6px; border-radius: 5px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 3px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
   .ft-action:hover:not(:disabled) { border-color: var(--border2); color: var(--text); }
   .ft-action:disabled { opacity: .45; cursor: not-allowed; }
+  .file-search { padding: 7px 8px; border-bottom: 0.5px solid var(--border); position: sticky; top: 29px; background: var(--bg); z-index: 1; }
+  .file-search input { width: 100%; border: 0.5px solid var(--border); border-radius: 6px; padding: 5px 7px; background: var(--bg2); color: var(--text); font-size: 11px; font-family: inherit; }
+  .file-search input:focus { outline: none; border-color: var(--blue-mid); background: var(--bg); }
   .ft-folder { padding: 5px 12px; font-size: 11px; font-weight: 500; color: var(--text2); display: flex; align-items: center; gap: 5px; margin-top: 3px; }
   .ft-file { padding: 4px 22px; font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 5px; cursor: pointer; transition: background .1s; }
   .ft-file:hover { background: var(--bg2); }
@@ -273,6 +280,15 @@
   .preview-viewer { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
   .preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
   .preview-note { font-size: 11px; color: var(--text3); margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .file-empty { padding: 14px 12px; color: var(--text3); font-size: 11px; line-height: 1.5; }
+
+  .project-card { border: 0.5px solid #5DCAA5; background: #E1F5EE; border-radius: var(--radius-lg); padding: 11px 12px; margin-left: 34px; animation: fadeUp .2s ease; }
+  .project-card-title { display: flex; align-items: center; gap: 6px; color: #085041; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .project-card-sub { color: #0F6E56; font-size: 11px; line-height: 1.5; margin-bottom: 9px; }
+  .project-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .project-act { border: 0.5px solid #5DCAA5; border-radius: var(--radius); padding: 5px 9px; background: white; color: #085041; font-size: 11px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .project-act.primary { background: #085041; color: white; border-color: #085041; }
+  .project-act:hover { filter: brightness(.97); }
 
   /* MEMORY */
   .mem-view { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -316,7 +332,7 @@
   @media (max-width: 720px) {
     .chat-layout { flex-direction: column; }
     .crew-panel { display: none; }
-    .proposal, .cp-block, .par-block, .done-block { margin-left: 0; }
+    .proposal, .cp-block, .par-block, .done-block, .project-card { margin-left: 0; }
     .bcontent { max-width: calc(100% - 34px); }
     .quick-prompts { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
     .input-area { padding: 8px 10px; }
@@ -451,11 +467,17 @@
         </div>
         <div class="messages" id="messages"></div>
         <div class="input-area">
-          <div class="quick-prompts">
-            <span class="qp" onclick="quickSend('Give me some app ideas')">Give me ideas</span>
-            <span class="qp" onclick="quickSend('What should I build next?')">What next?</span>
-            <span class="qp" onclick="quickSend('Tell me about yourselves')">Meet the crew</span>
-            <span class="qp" onclick="quickSend('What have we built so far?')">Our history</span>
+          <div class="compose-tools">
+            <div class="quick-prompts">
+              <span class="qp" onclick="quickSend('Give me some app ideas')">Give me ideas</span>
+              <span class="qp" onclick="quickSend('Build a simple app from this idea')">Build now</span>
+              <span class="qp" onclick="quickSend('Improve the app we just built')">Improve current app</span>
+              <span class="qp" onclick="quickSend('What have we built so far?')">History</span>
+            </div>
+            <div class="mode-toggle" title="Guided asks for approval at spec and blueprint. Quick builds without stopping.">
+              <button class="mode-btn active" id="mode-guided" onclick="setBuildMode('guided')"><i class="ti ti-route"></i>Guided</button>
+              <button class="mode-btn" id="mode-quick" onclick="setBuildMode('quick')"><i class="ti ti-bolt"></i>Quick</button>
+            </div>
           </div>
           <div class="input-row">
             <textarea class="chat-ta" id="chat-ta" placeholder="Chat with your crew — brainstorm, ask questions, give direction..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
@@ -475,9 +497,11 @@
           <div class="ft-actions">
             <button class="ft-action" id="preview-btn" onclick="showPreview()" disabled title="Run a live preview from the generated files"><i class="ti ti-player-play"></i>Preview</button>
             <button class="ft-action" id="zip-btn" onclick="downloadAllFiles()" disabled title="Download all files as a zip"><i class="ti ti-file-zip"></i>Zip</button>
+            <button class="ft-action" onclick="clearProject()" title="Clear generated files"><i class="ti ti-trash"></i></button>
             <span id="file-count" style="font-size:10px">0</span>
           </div>
         </div>
+        <div class="file-search"><input id="file-filter" placeholder="Search files..." oninput="renderTree()"></div>
         <div id="tree-root"></div>
       </div>
       <div class="code-pane">
@@ -584,6 +608,8 @@ const STORAGE_KEY_GEMINI = 'vc_gemini_key';
 const STORAGE_KEY_GROQ = 'vc_groq_key';
 const STORAGE_KEY_PASS = 'vc_passHash';
 const STORAGE_KEY_MEM  = 'vc_memory';
+const STORAGE_KEY_PROJECT = 'vc_project';
+const STORAGE_KEY_SETTINGS = 'vc_settings';
 
 function simpleHash(s){ let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;} return h.toString(36); }
 
@@ -641,7 +667,9 @@ function unlock(){
   // Show app
   document.getElementById('lock-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  loadSettings();
   loadMemoryFromStorage();
+  restoreProject();
   setTimeout(showWelcome, 400);
 }
 
@@ -676,7 +704,9 @@ window.addEventListener('load', ()=>{
   if(hasAnyProviderKey() && !storedPass){
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    loadSettings();
     loadMemoryFromStorage();
+    restoreProject();
     setTimeout(showWelcome, 400);
   } else if(hasAnyProviderKey() && storedPass){
     // Has password — show password field immediately
@@ -749,6 +779,8 @@ const S = {
   files: {}, commits: [], activeFile: null,
   gh: { token:'', repo:'', branch:'main', connected:false },
   memory: { preferences:{}, learnings:[], history:[], buildCount:0, conversationHistory:[] },
+  project: { title:'', idea:'', updatedAt:null },
+  settings: { buildMode:'guided' },
   resolveCP: null
 };
 
@@ -767,6 +799,15 @@ function switchTab(t){ ['chat','files','memory','keys','github'].forEach(v=>{ do
 function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(); } }
 function quickSend(t){ document.getElementById('chat-ta').value=t; handleSend(); }
+function saveSettings(){ try{ localStorage.setItem(STORAGE_KEY_SETTINGS,JSON.stringify(S.settings)); }catch(e){} }
+function loadSettings(){ try{ const raw=localStorage.getItem(STORAGE_KEY_SETTINGS); if(raw) S.settings={...S.settings,...JSON.parse(raw)}; }catch(e){} setBuildMode(S.settings.buildMode||'guided',true); }
+function setBuildMode(mode,skipSave){
+  S.settings.buildMode=mode==='quick'?'quick':'guided';
+  document.getElementById('mode-guided')?.classList.toggle('active',S.settings.buildMode==='guided');
+  document.getElementById('mode-quick')?.classList.toggle('active',S.settings.buildMode==='quick');
+  document.getElementById('chat-ta').placeholder=S.settings.buildMode==='quick'?'Describe an app and the crew will build without approval stops...':'Chat with your crew — brainstorm, ask questions, give direction...';
+  if(!skipSave) saveSettings();
+}
 function setStatus(txt,mode){ document.getElementById('stxt').textContent=txt; document.getElementById('sdot').className='sdot'+(mode==='live'?' live':mode==='thinking'?' thinking':''); }
 function setAgent(id,mode,status){ document.getElementById('av-'+id)?.classList.toggle('thinking',mode==='thinking'); document.getElementById('ol-'+id).className='a-online'+(mode==='busy'||mode==='thinking'?' busy':' on'); if(status) document.getElementById('st-'+id).textContent=status; document.getElementById('ar-'+id)?.classList.toggle('hl',mode==='thinking'||mode==='busy'); }
 function clearCtx(){ document.getElementById('ctx-val').textContent='Open conversation — ask anything'; document.getElementById('ctx-clear-btn').style.display='none'; }
@@ -942,6 +983,11 @@ async function handleSend(){
 
 async function routeMessage(text){
   const memCtx=buildMemCtx(); const lower=text.toLowerCase();
+  if(/\b(quick mode|fast mode|skip approvals|no approvals)\b/.test(lower)){ setBuildMode('quick'); addBubble('jordan','Quick mode is on. New builds will run without approval checkpoints.'); return; }
+  if(/\b(guided mode|ask approvals|approval steps|step by step)\b/.test(lower)){ setBuildMode('guided'); addBubble('jordan','Guided mode is on. I’ll stop at spec and blueprint so you can steer the build.'); return; }
+  if(/\b(preview|run the app|show app)\b/.test(lower)&&Object.keys(S.files).length){ switchTab('files'); showPreview(); addBubble('kai','Preview is open in the Files tab.'); return; }
+  if(/\b(zip|download all|download files)\b/.test(lower)&&Object.keys(S.files).length){ downloadAllFiles(); addBubble('leo','Downloading the current app as a ZIP.'); return; }
+  if(/\b(clear files|clear project|start over)\b/.test(lower)&&Object.keys(S.files).length){ if(clearProject()) addBubble('jordan','Cleared the current generated project from this browser.'); return; }
   const routeRaw=await callClaude(`You are a routing system. Given a user message, output ONLY one word: "chat", "brainstorm", "build", "history", or "feedback".`,`Message: "${text}"\nContext: ${memCtx}`,50);
   const route=routeRaw.trim().toLowerCase().replace(/[^a-z]/g,'');
   if(route==='build') await handleBuild(text);
@@ -1016,7 +1062,7 @@ async function handleBuild(text){ setCtx('Building: '+text.substring(0,40)); awa
 // ── BUILD PIPELINE ────────────────────────────────────────────────────────────
 async function runBuild(idea, ideaObj){
   S.memory.buildCount++; setStatus('Building...','live'); const memCtx=buildMemCtx();
-  S.files={}; S.activeFile=null; renderTree(); updateFileCounts();
+  S.files={}; S.activeFile=null; S.project={title:ideaObj?.title||idea.substring(0,60),idea,updatedAt:new Date().toISOString()}; renderTree(); updateFileCounts(); saveProject();
   document.getElementById('code-viewer').style.display='none';
   document.getElementById('preview-viewer').style.display='none';
   document.getElementById('no-file').style.display='flex';
@@ -1026,8 +1072,12 @@ async function runBuild(idea, ideaObj){
   const spec=await callClaude(`You are Jordan, a PM. Write clear product specs. Plain English, no jargon.`,`Spec for: "${idea}"\nMemory: ${memCtx}\n\nFormat:\n✦ What it is\n✦ Who it's for\n✦ Core features (4-6)\n✦ The feel\n✦ What makes it special\n\nMax 200 words.`,900);
   st.remove(); setAgent('jordan','on'); addBubble('jordan',spec,'Writing spec based on your history...');
 
-  const specFb=await addCP('Does this match your vision?','Approve or give feedback.');
-  if(specFb) learnFromFeedback(specFb);
+  if(S.settings.buildMode==='guided'){
+    const specFb=await addCP('Does this match your vision?','Approve or give feedback.');
+    if(specFb) learnFromFeedback(specFb);
+  } else {
+    addBubble('jordan','Quick mode is on, so I’m skipping approval stops and moving straight into the blueprint.');
+  }
 
   setAgent('maya','thinking','Designing blueprint...');
   const at=addTyping('maya');
@@ -1037,8 +1087,10 @@ async function runBuild(idea, ideaObj){
   at.remove(); setAgent('maya','on');
   addBubble('maya',`${arch.overview}\n\n${arch.components.length} components:\n${arch.components.map(c=>`• ${c.name} — ${c.description}`).join('\n')}`,arch.thought||null,false,arch.components.length>2?`${arch.components.length}-component structure`:'');
 
-  const archFb=await addCP('Happy with the blueprint?','Approve to start coding or request changes.');
-  if(archFb) learnFromFeedback(archFb);
+  if(S.settings.buildMode==='guided'){
+    const archFb=await addCP('Happy with the blueprint?','Approve to start coding or request changes.');
+    if(archFb) learnFromFeedback(archFb);
+  }
 
   setAgent('kai','thinking','Spawning parallel builders...');
   addBubble('kai',`Splitting into ${arch.components.length} parallel agents — each tackles a different component simultaneously.`,`Coordinating ${arch.components.length} sub-builders...`);
@@ -1086,9 +1138,10 @@ async function runBuild(idea, ideaObj){
 
   S.memory.history.push({title:idea.substring(0,50),ts:ts(),files:Object.keys(S.files).length});
   saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); setStatus('Done ✓','');
+  saveProject();
 
-  const doneEl=document.createElement('div'); doneEl.className='done-block';
-  doneEl.innerHTML=`<div class="done-title"><i class="ti ti-confetti"></i>Build #${S.memory.buildCount} complete!</div><div class="done-sub">${built.length} components in parallel · ${Object.keys(S.files).length} files · ${S.gh.connected?'Committed to '+S.gh.repo:'Files tab ready'} · Crew learned from this one</div>`;
+  const doneEl=document.createElement('div'); doneEl.className='project-card';
+  doneEl.innerHTML=`<div class="project-card-title"><i class="ti ti-rocket"></i>${esc(S.project.title||'App')} is ready</div><div class="project-card-sub">Build #${S.memory.buildCount} created ${Object.keys(S.files).length} files from ${built.length} component builders. ${S.gh.connected?'Files were committed to '+esc(S.gh.repo)+'.':'Files are saved in this browser and ready to preview or download.'}</div><div class="project-card-actions"><button class="project-act primary" onclick="switchTab('files');showPreview()"><i class="ti ti-player-play"></i>Preview app</button><button class="project-act" onclick="downloadAllFiles()"><i class="ti ti-file-zip"></i>Download ZIP</button><button class="project-act" onclick="switchTab('files')"><i class="ti ti-files"></i>Open files</button></div>`;
   document.getElementById('messages').appendChild(doneEl); scrollMsgs();
   switchTab('files');
   if(getPreviewFiles().length) showPreview();
@@ -1097,6 +1150,40 @@ async function runBuild(idea, ideaObj){
 }
 
 // ── FILES ─────────────────────────────────────────────────────────────────────
+function saveProject(){
+  try{
+    localStorage.setItem(STORAGE_KEY_PROJECT,JSON.stringify({
+      files:S.files,
+      activeFile:S.activeFile,
+      project:S.project,
+      savedAt:new Date().toISOString()
+    }));
+  }catch(e){}
+}
+function restoreProject(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY_PROJECT);
+    if(!raw) return;
+    const data=JSON.parse(raw);
+    S.files=data.files||{};
+    S.activeFile=data.activeFile||Object.keys(S.files)[0]||null;
+    S.project=data.project||S.project;
+    renderTree(); updateFileCounts();
+    if(S.activeFile) openFile(S.activeFile);
+    if(Object.keys(S.files).length) setStatus('Project restored','');
+  }catch(e){}
+}
+function clearProject(){
+  if(!Object.keys(S.files).length) return false;
+  if(!confirm('Clear the current generated files from this browser?')) return false;
+  S.files={}; S.activeFile=null; S.project={title:'',idea:'',updatedAt:null};
+  localStorage.removeItem(STORAGE_KEY_PROJECT);
+  renderTree(); updateFileCounts();
+  document.getElementById('code-viewer').style.display='none';
+  document.getElementById('preview-viewer').style.display='none';
+  document.getElementById('no-file').style.display='flex';
+  return true;
+}
 function updateFileCounts(){
   const n=Object.keys(S.files).length;
   document.getElementById('files-badge').textContent=n;
@@ -1106,14 +1193,16 @@ function updateFileCounts(){
   if(zipBtn) zipBtn.disabled=n===0;
   if(previewBtn) previewBtn.disabled=!getPreviewFiles().length;
 }
-function addFile(path,content,agent){ S.files[path]={content,agent,ts:new Date()}; renderTree(); updateFileCounts(); }
+function addFile(path,content,agent){ S.files[path]={content,agent,ts:new Date()}; renderTree(); updateFileCounts(); saveProject(); }
 function renderTree(){
   const root=document.getElementById('tree-root'); const folders={};
-  Object.keys(S.files).forEach(p=>{ const parts=p.split('/'); const folder=parts.length>1?parts.slice(0,-1).join('/'):''; if(!folders[folder])folders[folder]=[]; folders[folder].push(p); });
+  const filter=(document.getElementById('file-filter')?.value||'').toLowerCase().trim();
+  const paths=Object.keys(S.files).filter(p=>!filter||p.toLowerCase().includes(filter));
+  paths.forEach(p=>{ const parts=p.split('/'); const folder=parts.length>1?parts.slice(0,-1).join('/'):''; if(!folders[folder])folders[folder]=[]; folders[folder].push(p); });
   let html='';
   (folders['']||[]).forEach(p=>{ const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(p)}</div>`; });
   Object.keys(folders).filter(f=>f!=='').forEach(folder=>{ html+=`<div class="ft-folder"><i class="ti ti-folder" style="font-size:11px"></i>${esc(folder)}/</div>`; (folders[folder]||[]).forEach(p=>{ const fname=p.split('/').pop(); const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')" style="padding-left:28px"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(fname)}</div>`; }); });
-  root.innerHTML=html;
+  root.innerHTML=html||`<div class="file-empty">${Object.keys(S.files).length?'No files match your search.':'Generated files will appear here after a build.'}</div>`;
 }
 function openFile(path){ S.activeFile=path; const f=S.files[path]; if(!f) return; document.getElementById('no-file').style.display='none'; document.getElementById('preview-viewer').style.display='none'; const cv=document.getElementById('code-viewer'); cv.style.display='flex'; document.getElementById('cv-fn').textContent=path; document.getElementById('cv-code').textContent=f.content; const committed=S.commits.some(c=>c.files.includes(path)); document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none'; document.getElementById('preview-file-btn').style.display=getPreviewFiles().length?'flex':'none'; renderTree(); }
 function copyFile(){ if(S.activeFile) navigator.clipboard?.writeText(S.files[S.activeFile]?.content||''); }
@@ -1276,7 +1365,12 @@ function addCommitEntry(files,msg,sha){ S.commits.push({files,msg,sha,ts:new Dat
 
 // ── WELCOME ───────────────────────────────────────────────────────────────────
 function showWelcome(){
-  addBubble('jordan',"Hey! I'm Jordan, your PM. The whole crew is here — Maya, Kai, Priya, and Leo. You can chat with us, brainstorm ideas, ask us anything, or just say what you want to build and we'll get moving. What's on your mind?",'First contact — introduce the crew warmly...');
+  const fileCount=Object.keys(S.files).length;
+  if(fileCount){
+    addBubble('jordan',`Welcome back. I restored "${S.project.title||'your last app'}" with ${fileCount} files. You can preview it, download the ZIP, or tell us what to improve next.`,'Restored the previous browser project.');
+  } else {
+    addBubble('jordan',"Hey. I'm Jordan, your PM. Describe an app, ask for ideas, or switch to Quick mode if you want the crew to build without stopping for approvals.",'First contact — keep the next action obvious.');
+  }
 }
 </script>
 </body>

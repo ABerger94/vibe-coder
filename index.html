@@ -301,10 +301,14 @@
   .mem-txt { font-size: 12px; color: var(--text2); line-height: 1.5; flex: 1; }
   .mem-del { font-size: 11px; color: var(--text3); cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; }
   .mem-del:hover { color: #E24B4A; }
-  .pref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
-  .pref-card { padding: 8px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+  .pref-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+  .pref-card { padding: 8px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg); display: flex; flex-direction: column; gap: 6px; }
   .pref-lbl { font-size: 10px; color: var(--text3); margin-bottom: 2px; }
-  .pref-val { font-size: 12px; font-weight: 500; }
+  .pref-val { font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .pref-acts { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .pref-btn { border: 0.5px solid var(--border); background: var(--bg2); color: var(--text2); border-radius: 5px; padding: 3px 6px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+  .pref-btn:hover { border-color: var(--border2); color: var(--text); }
+  .pref-btn.danger:hover { color: #E24B4A; border-color: #F09595; background: #FCEBEB; }
   .mem-empty { font-size: 12px; color: var(--text3); padding: 8px 0; }
 
   /* GITHUB */
@@ -908,10 +912,35 @@ function updatePrefFromIdea(idea){ (idea.tags||[]).forEach(t=>bumpPref(t)); }
 function learnFromFeedback(fb){ const l=fb.toLowerCase(); if(l.includes('simpl')||l.includes('minimal'))bumpPref('minimal'); if(l.includes('modern')||l.includes('slick'))bumpPref('modern'); if(l.includes('dark'))bumpPref('dark mode'); if(l.includes('fast'))bumpPref('performance'); addLearning('You said: '+fb.substring(0,60)); }
 function buildMemCtx(){ const prefs=Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k).join(', '); const recent=S.memory.history.slice(-3).map(h=>h.title).join(', '); const conv=S.memory.conversationHistory.slice(-4).map(m=>`${m.role==='user'?'User':'Crew'}: ${m.text.substring(0,80)}`).join('\n'); return `Preferences: ${prefs||'unknown'}. Recent builds: ${recent||'none'}. Recent conversation:\n${conv||'none'}`; }
 function delLearning(i){ S.memory.learnings.splice(i,1); saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }
+function saveMemoryUI(){ saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }
+function prefKeyFromIndex(i){ return Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1])[i]?.[0]||null; }
+function editPref(i){
+  const key=prefKeyFromIndex(i);
+  if(!key) return;
+  const next=prompt('Rename preference',key)?.trim();
+  if(!next||next===key) return;
+  const val=S.memory.preferences[key]||1;
+  delete S.memory.preferences[key];
+  S.memory.preferences[next]=(S.memory.preferences[next]||0)+val;
+  saveMemoryUI();
+}
+function adjustPref(i,delta){
+  const key=prefKeyFromIndex(i);
+  if(!key) return;
+  S.memory.preferences[key]=Math.max(1,(S.memory.preferences[key]||1)+delta);
+  saveMemoryUI();
+}
+function delPref(i){
+  const key=prefKeyFromIndex(i);
+  if(!key) return;
+  if(!confirm(`Delete preference "${key}"?`)) return;
+  delete S.memory.preferences[key];
+  saveMemoryUI();
+}
 
 function updateMemoryUI(){
-  const pg=document.getElementById('pref-grid'); const prefs=Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  pg.innerHTML=prefs.length?prefs.map(([k,v])=>`<div class="pref-card"><div class="pref-lbl">Preference</div><div class="pref-val">${esc(k)} <span style="font-size:10px;color:#999">×${v}</span></div></div>`).join(''):'<div class="mem-empty">Nothing yet.</div>';
+  const pg=document.getElementById('pref-grid'); const prefs=Object.entries(S.memory.preferences).sort((a,b)=>b[1]-a[1]);
+  pg.innerHTML=prefs.length?prefs.map(([k,v],i)=>`<div class="pref-card"><div><div class="pref-lbl">Preference</div><div class="pref-val"><span>${esc(k)}</span><span style="font-size:10px;color:#999">×${v}</span></div></div><div class="pref-acts"><button class="pref-btn" onclick="editPref(${i})"><i class="ti ti-edit"></i>Edit</button><button class="pref-btn" onclick="adjustPref(${i},1)"><i class="ti ti-plus"></i></button><button class="pref-btn" onclick="adjustPref(${i},-1)"><i class="ti ti-minus"></i></button><button class="pref-btn danger" onclick="delPref(${i})"><i class="ti ti-trash"></i></button></div></div>`).join(''):'<div class="mem-empty">Nothing yet.</div>';
   const ll=document.getElementById('learned-list');
   ll.innerHTML=S.memory.learnings.length?S.memory.learnings.slice().reverse().map((l,i)=>`<div class="mem-entry"><span class="mem-src" style="background:#EAF3DE;color:#27500A">learned</span><div class="mem-txt">${esc(l.text)}</div><span class="mem-del" onclick="delLearning(${S.memory.learnings.length-1-i})"><i class="ti ti-x"></i></span></div>`).join(''):'<div class="mem-empty">No learnings yet.</div>';
   const hl=document.getElementById('history-list');
@@ -1289,7 +1318,7 @@ function previewSourceDoc(){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script>window.__previewError=function(msg){var root=document.getElementById('root');if(root)root.innerHTML='<div class="vc-preview-error">'+String(msg).replace(/[&<>]/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[ch];})+'</div>';};window.onerror=function(msg,src,line,col,err){window.__previewError((err&&err.stack)||msg);};window.onunhandledrejection=function(e){window.__previewError((e.reason&&e.reason.stack)||e.reason||'Preview failed');};<\/script>
+<script>window.__previewError=function(msg){var root=document.getElementById('root');if(root)root.innerHTML='<div class="vc-preview-error">'+String(msg).replace(/[&<>]/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[ch];})+'</div>';};window.onerror=function(msg,src,line,col,err){var root=document.getElementById('root');if(String(msg)==='Script error.'&&root&&!/Loading preview/.test(root.textContent||''))return true;window.__previewError((err&&err.stack)||msg);return true;};window.onunhandledrejection=function(e){window.__previewError((e.reason&&e.reason.stack)||e.reason||'Preview failed');};<\/script>
 <script src="https://cdn.tailwindcss.com" onerror="window.__previewError('Could not load Tailwind from cdn.tailwindcss.com')"><\/script>
 <style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#111827}.vc-preview-error{padding:18px;font-size:13px;line-height:1.6;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap}.vc-preview-empty{padding:32px;color:#6b7280;font-size:14px}.vc-preview-loading{padding:32px;color:#6b7280;font-size:14px}</style>
 </head>
@@ -1298,8 +1327,8 @@ function previewSourceDoc(){
 <script src="https://unpkg.com/react@18/umd/react.development.js" onerror="window.__previewError('Could not load React from unpkg.com')"><\/script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" onerror="window.__previewError('Could not load ReactDOM from unpkg.com')"><\/script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js" onerror="window.__previewError('Could not load Babel from unpkg.com')"><\/script>
-<script type="text/babel" data-presets="typescript,react">
-Object.assign(window,{useState:React.useState,useEffect:React.useEffect,useMemo:React.useMemo,useCallback:React.useCallback,useRef:React.useRef,useReducer:React.useReducer,useContext:React.useContext,createContext:React.createContext,Fragment:React.Fragment});
+<script id="preview-source" type="text/plain">
+const {useState,useEffect,useMemo,useCallback,useRef,useReducer,useContext,createContext,Fragment}=React;
 window.IconStub=({className='',...props}) => <span className={className} aria-hidden="true" style={{display:'inline-block',width:'1em',height:'1em',border:'1.5px solid currentColor',borderRadius:'999px',verticalAlign:'-0.125em'}} {...props}></span>;
 ['Search','Menu','X','Star','Heart','User','Users','Settings','Plus','Minus','Trash','Edit','Save','Download','Upload','ArrowRight','ArrowLeft','ChevronDown','ChevronUp','Check','AlertCircle','Info','Home','Calendar','Clock','Mail','Phone','MapPin','Sparkles','Zap','Play','Pause','ShoppingCart'].forEach(function(name){ window[name]=window.IconStub; });
 window.Button=({children,className='',...props}) => <button className={'inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white '+className} {...props}>{children}</button>;
@@ -1335,6 +1364,18 @@ ${scriptSafe(appCode)}
 } catch (err) {
   window.__previewError('Preview failed: '+String(err && (err.stack||err.message) || err));
 }
+<\/script>
+<script>
+(function(){
+  try{
+    if(!window.React||!window.ReactDOM||!window.Babel){ window.__previewError('Preview dependencies did not load. Check your network connection and try Refresh.'); return; }
+    var source=document.getElementById('preview-source').textContent;
+    var compiled=Babel.transform(source,{presets:['typescript','react'],filename:'preview.jsx'}).code;
+    new Function(compiled)();
+  }catch(err){
+    window.__previewError('Preview failed: '+String(err && (err.stack||err.message) || err));
+  }
+})();
 <\/script>
 <script>setTimeout(function(){var root=document.getElementById('root');if(root&&/Loading preview/.test(root.textContent||''))window.__previewError('Preview could not render. This usually means the generated code has syntax that the browser preview cannot compile. Open the component file and ask the crew to simplify or fix the preview error.');},5000);<\/script>
 </body>

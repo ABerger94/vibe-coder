@@ -214,6 +214,8 @@
   .cpb-go { background: var(--blue); color: white; border-color: var(--blue); }
   .cpb-go:hover { background: #0C447C; }
   .cpb-tw { background: white; color: #185FA5; border-color: #85B7EB; }
+  .cpb-send { background: #0C447C; color: white; border-color: #0C447C; display: none; }
+  .cpb-send.show { display: flex; }
 
   .par-block { border-radius: var(--radius-lg); border: 0.5px solid var(--border); overflow: hidden; margin-left: 34px; animation: fadeUp .2s ease; }
   .par-hdr { padding: 7px 11px; background: var(--bg2); font-size: 11px; font-weight: 500; color: var(--text2); display: flex; align-items: center; gap: 6px; border-bottom: 0.5px solid var(--border); }
@@ -870,12 +872,34 @@ function addCP(title, body){
   return new Promise(resolve=>{
     const msgs=document.getElementById('messages'); const uid='cp'+Date.now();
     const d=document.createElement('div'); d.className='cp-block';
-    d.innerHTML=`<div class="cp-top"><span class="cp-pill">Your call</span><span class="cp-title">${esc(title)}</span></div><div class="cp-body">${esc(body)}</div><input class="cp-inp" id="${uid}i" placeholder="Any tweaks? Or just approve..."><div class="cp-acts"><button class="cpb cpb-go" onclick="doCP('${uid}')"><i class="ti ti-check"></i>Looks good</button><button class="cpb cpb-tw" onclick="showCPI('${uid}')"><i class="ti ti-edit"></i>Change something</button></div>`;
+    d.innerHTML=`<div class="cp-top"><span class="cp-pill">Your call</span><span class="cp-title">${esc(title)}</span></div><div class="cp-body">${esc(body)}</div><input class="cp-inp" id="${uid}i" placeholder="Type the changes you want..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendCPChanges('${uid}')}"><div class="cp-acts"><button class="cpb cpb-go" id="${uid}ok" onclick="approveCP('${uid}')"><i class="ti ti-check"></i>Looks good</button><button class="cpb cpb-tw" id="${uid}edit" onclick="showCPI('${uid}')"><i class="ti ti-edit"></i>Change something</button><button class="cpb cpb-send" id="${uid}send" onclick="sendCPChanges('${uid}')"><i class="ti ti-send"></i>Send changes</button></div>`;
     msgs.appendChild(d); scrollMsgs(); S.resolveCP=resolve; beginAwaitingUserAction();
   });
 }
-function showCPI(uid){ const i=document.getElementById(uid+'i'); i.className='cp-inp show'; i.focus(); }
-function doCP(uid){ const i=document.getElementById(uid+'i'); const fb=i?.value?.trim()||null; const card=i?.closest('.cp-block'); if(card){card.style.opacity='.5';card.style.pointerEvents='none';} const f=S.resolveCP; S.resolveCP=null; endAwaitingUserAction(); if(fb) learnFromFeedback(fb); if(f) f(fb); }
+function showCPI(uid){
+  const i=document.getElementById(uid+'i');
+  if(!i) return;
+  i.className='cp-inp show';
+  document.getElementById(uid+'send')?.classList.add('show');
+  document.getElementById(uid+'edit')?.setAttribute('style','display:none');
+  i.focus();
+}
+function resolveCP(uid,fb){
+  const i=document.getElementById(uid+'i');
+  const card=i?.closest('.cp-block');
+  if(card){card.style.opacity='.5';card.style.pointerEvents='none';}
+  const f=S.resolveCP; S.resolveCP=null; endAwaitingUserAction();
+  if(fb) learnFromFeedback(fb);
+  if(f) f(fb||null);
+}
+function approveCP(uid){ resolveCP(uid,null); }
+function sendCPChanges(uid){
+  const i=document.getElementById(uid+'i');
+  const fb=i?.value?.trim()||'';
+  if(!fb){ showCPI(uid); return; }
+  resolveCP(uid,fb);
+}
+function doCP(uid){ approveCP(uid); }
 
 // ── MEMORY ───────────────────────────────────────────────────────────────────
 function addLearning(text){ S.memory.learnings.push({text,ts:ts()}); saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }

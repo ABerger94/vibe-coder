@@ -1263,6 +1263,77 @@ function parseJSONish(raw,fallback){
   try{return JSON.parse(raw);}catch{const m=String(raw||'').match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0]);}catch{}}
   return fallback;
 }
+function resolveImportPath(fromPath,importPath,files){
+  if(!importPath.startsWith('.')) return null;
+  const base=fromPath.split('/').slice(0,-1);
+  importPath.split('/').forEach(part=>{
+    if(!part||part==='.') return;
+    if(part==='..') base.pop();
+    else base.push(part);
+  });
+  const raw=base.join('/');
+  const candidates=[raw,raw+'.jsx',raw+'.js',raw+'.tsx',raw+'.ts',raw+'/index.jsx',raw+'/index.js'];
+  return candidates.find(p=>files[p]);
+}
+function validateGeneratedProject(){
+  const files=Object.fromEntries(Object.entries(S.files).map(([p,f])=>[p,String(f.content||'')]));
+  const issues=[];
+  const codePaths=Object.keys(files).filter(p=>/\.(jsx|tsx|js|ts)$/i.test(p));
+  const unsupported=/^(@\/|next\/|next$|framer-motion$|recharts$|@radix-ui\/|class-variance-authority$|tailwind-merge$|clsx$|sonner$|date-fns$)/;
+  const componentSkip=/(^|\/)(main|index|vite\.config|tailwind\.config|postcss\.config)\.(jsx|tsx|js|ts)$/i;
+  codePaths.forEach(path=>{
+    const code=stripCodeFence(files[path]);
+    if(/```/.test(files[path])) issues.push(`${path}: contains markdown code fences; file content must be raw code only.`);
+    if(/^\s*(Here|Sure|This|Below)\b/im.test(code)) issues.push(`${path}: appears to contain explanatory prose instead of only source code.`);
+    if(/\.(jsx|tsx)$/i.test(path)&&!componentSkip.test(path)&&!looksLikeComponent(code)) issues.push(`${path}: does not look like a renderable React component.`);
+    if(/\.(jsx|tsx)$/i.test(path)&&!componentSkip.test(path)&&!/export\s+default/.test(code)) issues.push(`${path}: missing a default export, which the generated App imports.`);
+    if(/\bclass=/.test(code)) issues.push(`${path}: uses HTML class= instead of React className=.`);
+    if(/[“”‘’]/.test(code)) issues.push(`${path}: contains smart quotes that can break JavaScript strings or JSX attributes.`);
+    [...code.matchAll(/import\s+(?:[\s\S]*?\s+from\s*)?['"]([^'"]+)['"]/g)].forEach(match=>{
+      const source=match[1];
+      if(source.startsWith('.')&&!resolveImportPath(path,source,files)) issues.push(`${path}: unresolved local import "${source}".`);
+      if(unsupported.test(source)) issues.push(`${path}: imports unsupported package "${source}". Use React, lucide-react, Tailwind, or local files only.`);
+    });
+  });
+  if(!getPreviewFiles().length) issues.push('Project has no previewable React component files.');
+  return issues;
+}
+async function repairGeneratedProject(issues,spec,memCtx){
+  setAgent('kai','thinking','Repairing code...');
+  const context=projectFileContext(26000);
+  const raw=await callClaude(`You are Kai, a senior React/Vite repair engineer. Output ONLY valid JSON.
+Return complete replacements for every file you change:
+{"summary":"short repair summary","files":[{"path":"src/App.jsx","content":"complete file content"}],"deletePaths":[]}
+
+Rules:
+- Fix every listed validation issue.
+- Keep files StackBlitz/Vite compatible.
+- Use only React, lucide-react, Tailwind CSS, and local files.
+- No shadcn/ui, "@/..." aliases, Next.js APIs, framer-motion, recharts, or prose.
+- Every React component file must default export a component.
+- Return raw source code in content fields, never markdown fences.`,`Spec:\n${spec}\n\nStyle prefs:\n${memCtx}\n\nValidation issues:\n${issues.map(i=>'- '+i).join('\n')}\n\nCurrent project:\n${context}`,2600);
+  const result=parseJSONish(raw,{summary:'Repair did not return valid JSON.',files:[],deletePaths:[]});
+  const files=Array.isArray(result.files)?result.files.filter(f=>f&&f.path&&typeof f.content==='string'):[];
+  const deletePaths=Array.isArray(result.deletePaths)?result.deletePaths.map(p=>String(p).trim()).filter(Boolean):[];
+  deletePaths.forEach(path=>{ delete S.files[path]; });
+  files.forEach(f=>addFile(f.path,stripCodeFence(f.content),'Kai'));
+  return result.summary||`Repaired ${files.length} file${files.length===1?'':'s'}.`;
+}
+async function verifyAndRepairBuild(spec,memCtx){
+  let issues=validateGeneratedProject();
+  for(let attempt=1;issues.length&&attempt<=2;attempt++){
+    addBubble('priya',`I found ${issues.length} build issue${issues.length===1?'':'s'} before shipping. Sending them back to Kai now.`,issues.slice(0,5).join('\n'),false,'Pre-ship validation failed');
+    const summary=await repairGeneratedProject(issues,spec,memCtx);
+    addBubble('kai',summary,'Applied validation repairs before finalizing.');
+    issues=validateGeneratedProject();
+  }
+  if(issues.length){
+    addBubble('priya',`I still see ${issues.length} issue${issues.length===1?'':'s'} after repair. I’m leaving the files available, but this build needs manual attention before StackBlitz should be trusted.`,issues.slice(0,8).join('\n'),false,'Manual repair needed');
+  } else {
+    addBubble('priya','Pre-ship validation passed: components have default exports, imports resolve, and unsupported StackBlitz dependencies were blocked.',null,false,'Validation passed');
+  }
+  return issues;
+}
 function archSummary(arch){
   return `${arch.overview||'Here is the current blueprint.'}\n\n${(arch.components||[]).length} components:\n${(arch.components||[]).map(c=>`• ${c.name} — ${c.description}`).join('\n')}`;
 }
@@ -1335,16 +1406,17 @@ async function runBuild(idea, ideaObj){
   document.getElementById('messages').appendChild(parBlock); scrollMsgs();
 
   let built=await Promise.all(arch.components.map(async(comp)=>{
-    const code=await callClaude(`You are a sub-builder. Write a complete React component. Output ONLY code — no explanation, no fences.`,`Build: ${comp.name} (${comp.description})\nSpec: ${spec}\nStyle prefs: ${memCtx}\n\nComplete React + Tailwind component. Beautiful, functional, production-ready.`,900);
+    const code=await callClaude(`You are a sub-builder. Write one complete React component file for Vite. Output ONLY raw code, no explanation, no markdown fences.`,`Build: ${comp.name} (${comp.description})\nTarget file: ${comp.file}\nSpec: ${spec}\nStyle prefs: ${memCtx}\n\nHard requirements:\n- Use React function components and default export the component.\n- Use only React, lucide-react, Tailwind CSS, and browser APIs.\n- Do not import shadcn/ui, @/ aliases, Next.js APIs, framer-motion, recharts, CSS files, or missing local modules.\n- Keep all helper components/data inside this file unless the blueprint explicitly names another local file.\n- Code must run in StackBlitz as a Vite React app.\n\nReturn the full file now.`,1200);
     document.getElementById('pbdot-'+comp.id).className='pb-dot done';
     document.getElementById('pbst-'+comp.id).textContent='Done ✓';
-    addFile(comp.file,code,'Kai'); return {...comp,code};
+    const cleanCode=stripCodeFence(code);
+    addFile(comp.file,cleanCode,'Kai'); return {...comp,code:cleanCode};
   }));
   setAgent('kai','on','Builder');
   addBubble('kai',`All ${built.length} components done! Parallel power.`,null,false,`${built.length} components simultaneously`);
 
   addFile('src/lib/financials.ts',financialsModule(),'System');
-  addFile('package.json',JSON.stringify({name:idea.split(' ').slice(0,3).join('-').toLowerCase().replace(/[^a-z0-9-]/g,''),version:'0.1.0',private:true,scripts:{dev:'vite',build:'vite build'},dependencies:{react:'^18.2.0','react-dom':'^18.2.0'},devDependencies:{'@vitejs/plugin-react':'^4.0.0',vite:'^4.4.0',tailwindcss:'^3.3.0'}},null,2),'System');
+  addFile('package.json',JSON.stringify({name:idea.split(' ').slice(0,3).join('-').toLowerCase().replace(/[^a-z0-9-]/g,''),version:'0.1.0',private:true,scripts:{dev:'vite --host 0.0.0.0',start:'vite --host 0.0.0.0',build:'vite build'},dependencies:{react:'^18.2.0','react-dom':'^18.2.0','lucide-react':'^0.468.0'},devDependencies:{'@vitejs/plugin-react':'^4.0.0',vite:'^4.4.0',tailwindcss:'^3.3.0',postcss:'^8.4.0',autoprefixer:'^10.4.0'}},null,2),'System');
   addFile('index.css','@tailwind base;\n@tailwind components;\n@tailwind utilities;','System');
   addFile('README.md',`# ${idea.substring(0,40)}\n\nBuilt with Vibe Coder.\n\n## Start\n\`\`\`\nnpm install && npm run dev\n\`\`\`\n\n## Components\n${built.map(c=>`- **${c.name}** — ${c.description}`).join('\n')}\n`,'System');
 
@@ -1366,6 +1438,19 @@ async function runBuild(idea, ideaObj){
     } else {
       codeApproved=true;
     }
+  }
+
+  setAgent('priya','thinking','Running validation...');
+  const validationIssues=await verifyAndRepairBuild(spec,memCtx);
+  setAgent('priya','on','Reviewer');
+  renderTree(); updateFileCounts(); saveProject();
+  if(validationIssues.length){
+    setStatus('Needs fixes','');
+    setAgent('leo','on','Blocked');
+    addBubble('leo','I’m not shipping this build because validation still found code issues. The files are saved in the Files tab so you can inspect them or ask Kai to fix the listed errors.',null,false,'Shipping blocked by validation');
+    switchTab('files');
+    if(getPreviewFiles().length) showPreview();
+    return;
   }
 
   setAgent('leo','thinking','Shipping...');

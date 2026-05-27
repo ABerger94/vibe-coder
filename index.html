@@ -276,8 +276,12 @@
   .cta:hover { border-color: var(--border2); color: var(--text); }
   .cta.primary { background: var(--blue); color: white; border-color: var(--blue); }
   .cta.primary:hover { background: #0C447C; }
+  .cta.danger { color: #9D2C20; border-color: #F0C4BF; background: #FFF7F6; }
   .code-body { flex: 1; overflow: auto; padding: 12px; background: var(--bg2); }
   .code-body pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.7; color: var(--text2); white-space: pre-wrap; word-break: break-all; }
+  .code-edit { display: none; width: 100%; min-height: 100%; resize: none; border: 0; outline: none; background: #fff; color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.65; padding: 0; }
+  .code-body.editing pre { display: none; }
+  .code-body.editing .code-edit { display: block; }
   .no-file { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 7px; color: var(--text3); font-size: 12px; padding: 3rem; text-align: center; }
   .preview-viewer { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
   .preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; overflow: hidden; }
@@ -517,13 +521,17 @@
           <div class="code-tb">
             <span class="code-fn" id="cv-fn"></span>
             <div class="code-acts">
+              <button class="cta" id="edit-file-btn" onclick="editFile()"><i class="ti ti-edit"></i> Edit</button>
+              <button class="cta primary" id="save-file-btn" onclick="saveFileEdit()" style="display:none"><i class="ti ti-device-floppy"></i> Save</button>
+              <button class="cta" id="cancel-file-btn" onclick="cancelFileEdit()" style="display:none"><i class="ti ti-x"></i> Cancel</button>
+              <button class="cta danger" onclick="deleteActiveFile()"><i class="ti ti-trash"></i></button>
               <button class="cta" onclick="copyFile()"><i class="ti ti-copy"></i> Copy</button>
               <button class="cta" onclick="dlFile()"><i class="ti ti-download"></i> Download</button>
               <button class="cta" id="preview-file-btn" onclick="showPreview()" style="display:none"><i class="ti ti-player-play"></i> Preview</button>
               <button class="cta primary" id="commit-btn" onclick="commitSingle()" style="display:none"><i class="ti ti-brand-github"></i> Commit</button>
             </div>
           </div>
-          <div class="code-body"><pre id="cv-code"></pre></div>
+          <div class="code-body" id="code-body"><pre id="cv-code"></pre><textarea class="code-edit" id="cv-edit" spellcheck="false"></textarea></div>
         </div>
         <div id="preview-viewer" class="preview-viewer">
           <div class="code-tb">
@@ -1053,6 +1061,7 @@ async function routeMessage(text){
   if(/\b(preview|run the app|show app)\b/.test(lower)&&Object.keys(S.files).length){ switchTab('files'); showPreview(); addBubble('kai','Preview is open in the Files tab.'); return; }
   if(/\b(zip|download all|download files)\b/.test(lower)&&Object.keys(S.files).length){ downloadAllFiles(); addBubble('leo','Downloading the current app as a ZIP.'); return; }
   if(/\b(clear files|clear project|start over)\b/.test(lower)&&Object.keys(S.files).length){ if(clearProject()) addBubble('jordan','Cleared the current generated project from this browser.'); return; }
+  if(Object.keys(S.files).length && isProjectEditRequest(lower)){ await handleProjectEdit(text); return; }
   const routeRaw=await callClaude(`You are a routing system. Given a user message, output ONLY one word: "chat", "brainstorm", "build", "history", or "feedback".`,`Message: "${text}"\nContext: ${memCtx}`,50);
   const route=routeRaw.trim().toLowerCase().replace(/[^a-z]/g,'');
   if(route==='build') await handleBuild(text);
@@ -1124,7 +1133,132 @@ async function handleFeedback(text){
 
 async function handleBuild(text){ setCtx('Building: '+text.substring(0,40)); await runBuild(text); }
 
+function isProjectEditRequest(lower){
+  return /\b(edit|change|modify|update|refactor|fix|improve|upgrade|rebuild|resave|rewrite|add|remove|delete)\b/.test(lower)&&/\b(app|project|file|files|component|code|preview|current|built|generated|it|this)\b/.test(lower);
+}
+
+function projectFileContext(maxChars=18000){
+  const entries=Object.entries(S.files).sort(([a],[b])=>a.localeCompare(b));
+  let used=0;
+  const chunks=[];
+  for(const [path,file] of entries){
+    const content=String(file.content||'');
+    const room=maxChars-used;
+    if(room<=0) break;
+    const body=content.length>room?content.slice(0,Math.max(0,room-160))+'\n/* truncated */':content;
+    used+=body.length+path.length;
+    chunks.push(`FILE: ${path}\n${body}`);
+  }
+  return `Project: ${S.project.title||'Untitled'}\nFiles:\n${entries.map(([p])=>'- '+p).join('\n')}\n\n${chunks.join('\n\n---\n\n')}`;
+}
+
+function fileEditSystemPrompt(){
+  return `You are Kai, a senior app builder operating on a virtual project file system.
+You can read the current files and must return complete file replacements for every file you edit or create.
+Output ONLY valid JSON with this shape:
+{"summary":"short summary","files":[{"path":"src/App.jsx","content":"complete file content"}],"deletePaths":["src/old-file.jsx"],"notes":["optional note"]}
+
+Rules:
+- Preserve existing files and paths unless the user asks to restructure.
+- Return only files that need to change or be created.
+- Put deleted files in deletePaths only when the user explicitly asks to remove or replace them.
+- Do not omit unchanged parts of a file. Every returned content field is a full replacement.
+- Keep React/Vite preview compatibility.
+- Prefer component-level files under src/components and shared logic under src/lib.
+- If the request touches commission, surplus, claims, unemployment, CAC, or simulations, use src/lib/financials.ts.`;
+}
+
+async function handleProjectEdit(text){
+  setCtx('Editing current project');
+  setAgent('kai','thinking','Reading files...');
+  switchTab('files');
+  const typing=addTyping('kai');
+  const raw=await callClaude(fileEditSystemPrompt(),`User change request:\n${text}\n\nCurrent project context:\n${projectFileContext()}\n\nReturn the JSON patch now.`,2400);
+  const result=parseJSONish(raw,{summary:'I could not understand the edit response.',files:[],notes:['No files changed.']});
+  typing.remove();
+  const files=Array.isArray(result.files)?result.files.filter(f=>f&&f.path&&typeof f.content==='string'):[];
+  const deletePaths=Array.isArray(result.deletePaths)?result.deletePaths.map(p=>String(p).trim()).filter(Boolean):[];
+  if(!files.length&&!deletePaths.length){
+    setAgent('kai','on','Builder');
+    addBubble('kai',result.summary||'I could not produce a safe file edit from that request.',(result.notes||[]).join('\n')||null);
+    return;
+  }
+  deletePaths.forEach(path=>{ delete S.files[path]; });
+  files.forEach(f=>addFile(String(f.path).trim(),f.content,'Kai'));
+  if(!S.project.title) S.project.title='Edited app';
+  S.project.updatedAt=new Date().toISOString();
+  saveProject();
+  setAgent('kai','on','Builder');
+  const changed=[...files.map(f=>f.path),...deletePaths.map(p=>'deleted '+p)].join(', ');
+  addBubble('kai',result.summary||`Updated ${files.length} file${files.length===1?'':'s'}.`,changed,false,`${files.length} saved, ${deletePaths.length} deleted`);
+  addLearning('Edited current project: '+text.substring(0,80));
+  updateMemoryUI(); updateSidebarMem();
+  renderTree(); updateFileCounts();
+  if(files[0]) openFile(files[0].path);
+  else if(S.activeFile&&!S.files[S.activeFile]){
+    S.activeFile=Object.keys(S.files)[0]||null;
+    if(S.activeFile) openFile(S.activeFile);
+    else {
+      document.getElementById('code-viewer').style.display='none';
+      document.getElementById('preview-viewer').style.display='none';
+      document.getElementById('no-file').style.display='flex';
+    }
+  }
+  if(getPreviewFiles().length) showPreview();
+}
+
 // ── BUILD PIPELINE ────────────────────────────────────────────────────────────
+function financialsModule(){
+  return `export interface Policy {
+  monthlyIncome: number;
+  coveragePercentage: 0.5 | 0.65 | 0.8;
+  surplus: number;
+}
+
+export interface ClaimSimulation {
+  months: number;
+  monthlyPayout: number;
+  totalPayout: number;
+  remainingSurplus: number;
+}
+
+export const MINIMUM_COMMISSION_RATE = 0.15;
+export const DEFAULT_SURPLUS_THRESHOLD = 10000;
+
+export function calculatePayout(policy: Policy): number {
+  return policy.monthlyIncome * policy.coveragePercentage;
+}
+
+export function calculateCommission(premium: number, rate = MINIMUM_COMMISSION_RATE): number {
+  return premium * Math.max(rate, MINIMUM_COMMISSION_RATE);
+}
+
+export function randomClaimMonths(min = 2, max = 6): number {
+  const low = Math.ceil(min);
+  const high = Math.floor(max);
+  return Math.floor(Math.random() * (high - low + 1)) + low;
+}
+
+export function simulateUnemploymentClaim(policy: Policy, months = randomClaimMonths()): ClaimSimulation {
+  const monthlyPayout = calculatePayout(policy);
+  const totalPayout = monthlyPayout * months;
+  return {
+    months,
+    monthlyPayout,
+    totalPayout,
+    remainingSurplus: policy.surplus - totalPayout,
+  };
+}
+
+export function adjustCAC(currentSurplus: number, threshold: number, currentCAC: number): number {
+  if (currentSurplus < threshold) {
+    return currentCAC * 0.6;
+  }
+  return currentCAC;
+}
+`;
+}
+
 function parseJSONish(raw,fallback){
   try{return JSON.parse(raw);}catch{const m=String(raw||'').match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0]);}catch{}}
   return fallback;
@@ -1209,6 +1343,7 @@ async function runBuild(idea, ideaObj){
   setAgent('kai','on','Builder');
   addBubble('kai',`All ${built.length} components done! Parallel power.`,null,false,`${built.length} components simultaneously`);
 
+  addFile('src/lib/financials.ts',financialsModule(),'System');
   addFile('package.json',JSON.stringify({name:idea.split(' ').slice(0,3).join('-').toLowerCase().replace(/[^a-z0-9-]/g,''),version:'0.1.0',private:true,scripts:{dev:'vite',build:'vite build'},dependencies:{react:'^18.2.0','react-dom':'^18.2.0'},devDependencies:{'@vitejs/plugin-react':'^4.0.0',vite:'^4.4.0',tailwindcss:'^3.3.0'}},null,2),'System');
   addFile('index.css','@tailwind base;\n@tailwind components;\n@tailwind utilities;','System');
   addFile('README.md',`# ${idea.substring(0,40)}\n\nBuilt with Vibe Coder.\n\n## Start\n\`\`\`\nnpm install && npm run dev\n\`\`\`\n\n## Components\n${built.map(c=>`- **${c.name}** — ${c.description}`).join('\n')}\n`,'System');
@@ -1313,7 +1448,62 @@ function renderTree(){
   Object.keys(folders).filter(f=>f!=='').forEach(folder=>{ html+=`<div class="ft-folder"><i class="ti ti-folder" style="font-size:11px"></i>${esc(folder)}/</div>`; (folders[folder]||[]).forEach(p=>{ const fname=p.split('/').pop(); const committed=S.commits.some(c=>c.files.includes(p)); html+=`<div class="ft-file ${p===S.activeFile?'active':''} ${committed?'committed':'fresh'}" onclick="openFile('${esc(p)}')" style="padding-left:28px"><div class="fidot"></div><i class="ti ti-file-code" style="font-size:11px"></i>${esc(fname)}</div>`; }); });
   root.innerHTML=html||`<div class="file-empty">${Object.keys(S.files).length?'No files match your search.':'Generated files will appear here after a build.'}</div>`;
 }
-function openFile(path){ S.activeFile=path; const f=S.files[path]; if(!f) return; document.getElementById('no-file').style.display='none'; document.getElementById('preview-viewer').style.display='none'; const cv=document.getElementById('code-viewer'); cv.style.display='flex'; document.getElementById('cv-fn').textContent=path; document.getElementById('cv-code').textContent=f.content; const committed=S.commits.some(c=>c.files.includes(path)); document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none'; document.getElementById('preview-file-btn').style.display=getPreviewFiles().length?'flex':'none'; renderTree(); }
+function openFile(path){
+  S.activeFile=path;
+  const f=S.files[path];
+  if(!f) return;
+  document.getElementById('no-file').style.display='none';
+  document.getElementById('preview-viewer').style.display='none';
+  const cv=document.getElementById('code-viewer');
+  cv.style.display='flex';
+  document.getElementById('cv-fn').textContent=path;
+  document.getElementById('cv-code').textContent=f.content;
+  document.getElementById('cv-edit').value=f.content;
+  setFileEditMode(false);
+  const committed=S.commits.some(c=>c.files.includes(path));
+  document.getElementById('commit-btn').style.display=S.gh.connected&&!committed?'flex':'none';
+  document.getElementById('preview-file-btn').style.display=getPreviewFiles().length?'flex':'none';
+  renderTree();
+}
+function setFileEditMode(on){
+  document.getElementById('code-body')?.classList.toggle('editing',!!on);
+  document.getElementById('edit-file-btn').style.display=on?'none':'flex';
+  document.getElementById('save-file-btn').style.display=on?'flex':'none';
+  document.getElementById('cancel-file-btn').style.display=on?'flex':'none';
+  if(on) document.getElementById('cv-edit')?.focus();
+}
+function editFile(){ if(S.activeFile) setFileEditMode(true); }
+function cancelFileEdit(){
+  if(!S.activeFile) return;
+  document.getElementById('cv-edit').value=S.files[S.activeFile]?.content||'';
+  setFileEditMode(false);
+}
+function saveFileEdit(){
+  if(!S.activeFile) return;
+  const content=document.getElementById('cv-edit').value;
+  S.files[S.activeFile]={...(S.files[S.activeFile]||{}),content,agent:'You',ts:new Date()};
+  S.project.updatedAt=new Date().toISOString();
+  document.getElementById('cv-code').textContent=content;
+  setFileEditMode(false);
+  renderTree(); updateFileCounts(); saveProject();
+  addLearning('Manually edited '+S.activeFile);
+  updateMemoryUI(); updateSidebarMem();
+}
+function deleteActiveFile(){
+  if(!S.activeFile) return;
+  const path=S.activeFile;
+  if(!confirm(`Delete ${path}?`)) return;
+  delete S.files[path];
+  S.activeFile=Object.keys(S.files)[0]||null;
+  S.project.updatedAt=new Date().toISOString();
+  renderTree(); updateFileCounts(); saveProject();
+  if(S.activeFile) openFile(S.activeFile);
+  else {
+    document.getElementById('code-viewer').style.display='none';
+    document.getElementById('preview-viewer').style.display='none';
+    document.getElementById('no-file').style.display='flex';
+  }
+}
 function copyFile(){ if(S.activeFile) navigator.clipboard?.writeText(S.files[S.activeFile]?.content||''); }
 function dlFile(){ if(!S.activeFile) return; const b=new Blob([S.files[S.activeFile]?.content||''],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=S.activeFile.split('/').pop(); a.click(); }
 function getPreviewFiles(){

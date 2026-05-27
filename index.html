@@ -708,6 +708,8 @@ function saveProviderKeysFromSettings(){
 // ── APP STATE ────────────────────────────────────────────────────────────────
 const S = {
   busy: false,
+  activeTurns: 0,
+  awaitingUserAction: 0,
   files: {}, commits: [], activeFile: null,
   gh: { token:'', repo:'', branch:'main', connected:false },
   memory: { preferences:{}, learnings:[], history:[], buildCount:0, conversationHistory:[] },
@@ -734,6 +736,14 @@ function setAgent(id,mode,status){ document.getElementById('av-'+id)?.classList.
 function clearCtx(){ document.getElementById('ctx-val').textContent='Open conversation — ask anything'; document.getElementById('ctx-clear-btn').style.display='none'; }
 function setCtx(txt){ document.getElementById('ctx-val').textContent=txt; document.getElementById('ctx-clear-btn').style.display='inline'; }
 function scrollMsgs(){ const m=document.getElementById('messages'); if(!m) return; requestAnimationFrame(()=>{ m.scrollTop=m.scrollHeight; }); }
+function updateComposerState(){
+  const locked=S.activeTurns>0 && S.awaitingUserAction===0;
+  const btn=document.getElementById('send-btn');
+  if(btn){ btn.disabled=locked; btn.innerHTML=locked?'<div class="spin"></div>':'<i class="ti ti-send"></i> Send'; }
+  S.busy=locked;
+}
+function beginAwaitingUserAction(){ S.awaitingUserAction++; updateComposerState(); }
+function endAwaitingUserAction(){ S.awaitingUserAction=Math.max(0,S.awaitingUserAction-1); updateComposerState(); }
 
 // ── BUBBLES ──────────────────────────────────────────────────────────────────
 function addBubble(agentKey, text, thought, isCode, learned){
@@ -768,11 +778,11 @@ function addIdeasProposal(ideas, subtext){
     const d=document.createElement('div'); d.className='proposal';
     const rows=ideas.map((idea,i)=>`<div class="idea-item" id="${uid}i${i}" role="button" tabindex="0" onclick="approveIdea('${uid}',${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();approveIdea('${uid}',${i})}"><div class="idea-num" id="${uid}n${i}">${i+1}</div><div class="idea-body"><div class="idea-title">${esc(idea.title)}</div><div class="idea-desc">${esc(idea.description)}</div><div class="idea-tags">${(idea.tags||[]).map(t=>`<span class="idea-tag">${esc(t)}</span>`).join('')}</div></div></div>`).join('');
     d.innerHTML=`<div class="proposal-hdr"><i class="ti ti-bulb" style="font-size:15px;color:#185FA5"></i>${esc(subtext||'Pick an idea to build')}</div><div>${rows}</div><div class="proposal-acts"><button class="pabtn pabtn-go" id="${uid}go" onclick="approveIdea('${uid}')"><i class="ti ti-player-play"></i>Build selected</button><button class="pabtn pabtn-sec" onclick="moreIdeas('${uid}')"><i class="ti ti-refresh"></i>More ideas</button><button class="pabtn pabtn-sec" onclick="dismissIdeas('${uid}')">Just browsing</button></div>`;
-    msgs.appendChild(d); scrollMsgs(); d._ideas=ideas; d._resolve=resolve; window['_ip_'+uid]=d;
+    msgs.appendChild(d); scrollMsgs(); d._ideas=ideas; d._resolve=resolve; window['_ip_'+uid]=d; beginAwaitingUserAction();
   });
 }
 function selIdea(uid,i){ const c=window['_ip_'+uid]; if(!c||c._resolve===null) return; c._sel=i; c.querySelectorAll('.idea-item').forEach((el,idx)=>el.classList.toggle('sel',idx===i)); }
-function resolveIdeaProposal(uid,result){ const c=window['_ip_'+uid]; if(!c||c._resolve===null) return; c.style.opacity='.5'; c.style.pointerEvents='none'; const f=c._resolve; c._resolve=null; delete window['_ip_'+uid]; if(f) f(result); scrollMsgs(); }
+function resolveIdeaProposal(uid,result){ const c=window['_ip_'+uid]; if(!c||c._resolve===null) return; c.style.opacity='.5'; c.style.pointerEvents='none'; const f=c._resolve; c._resolve=null; delete window['_ip_'+uid]; endAwaitingUserAction(); if(f) f(result); scrollMsgs(); }
 function approveIdea(uid,i){ const c=window['_ip_'+uid]; if(!c||c._resolve===null) return; if(i!==undefined) selIdea(uid,i); if(c._sel===undefined) c._sel=0; const idea=c._ideas[c._sel]; addLearning('Approved: '+idea.title); updatePrefFromIdea(idea); resolveIdeaProposal(uid,{action:'build',idea}); }
 function moreIdeas(uid){ resolveIdeaProposal(uid,{action:'more'}); }
 function dismissIdeas(uid){ resolveIdeaProposal(uid,{action:'dismiss'}); }
@@ -783,11 +793,11 @@ function addCP(title, body){
     const msgs=document.getElementById('messages'); const uid='cp'+Date.now();
     const d=document.createElement('div'); d.className='cp-block';
     d.innerHTML=`<div class="cp-top"><span class="cp-pill">Your call</span><span class="cp-title">${esc(title)}</span></div><div class="cp-body">${esc(body)}</div><input class="cp-inp" id="${uid}i" placeholder="Any tweaks? Or just approve..."><div class="cp-acts"><button class="cpb cpb-go" onclick="doCP('${uid}')"><i class="ti ti-check"></i>Looks good</button><button class="cpb cpb-tw" onclick="showCPI('${uid}')"><i class="ti ti-edit"></i>Change something</button></div>`;
-    msgs.appendChild(d); scrollMsgs(); S.resolveCP=resolve;
+    msgs.appendChild(d); scrollMsgs(); S.resolveCP=resolve; beginAwaitingUserAction();
   });
 }
 function showCPI(uid){ const i=document.getElementById(uid+'i'); i.className='cp-inp show'; i.focus(); }
-function doCP(uid){ const i=document.getElementById(uid+'i'); const fb=i?.value?.trim()||null; const card=i?.closest('.cp-block'); if(card){card.style.opacity='.5';card.style.pointerEvents='none';} const f=S.resolveCP; S.resolveCP=null; if(fb) learnFromFeedback(fb); if(f) f(fb); }
+function doCP(uid){ const i=document.getElementById(uid+'i'); const fb=i?.value?.trim()||null; const card=i?.closest('.cp-block'); if(card){card.style.opacity='.5';card.style.pointerEvents='none';} const f=S.resolveCP; S.resolveCP=null; endAwaitingUserAction(); if(fb) learnFromFeedback(fb); if(f) f(fb); }
 
 // ── MEMORY ───────────────────────────────────────────────────────────────────
 function addLearning(text){ S.memory.learnings.push({text,ts:ts()}); saveMemoryToStorage(); updateMemoryUI(); updateSidebarMem(); }
@@ -883,14 +893,14 @@ async function callGroq(sys,usr,max){
 // ── ROUTING ───────────────────────────────────────────────────────────────────
 async function handleSend(){
   const ta=document.getElementById('chat-ta'); const text=ta.value.trim();
-  if(!text||S.busy) return;
+  const locked=S.activeTurns>0 && S.awaitingUserAction===0;
+  if(!text||locked) return;
   ta.value=''; ta.style.height='auto'; addUserBubble(text);
-  const btn=document.getElementById('send-btn'); btn.disabled=true; btn.innerHTML='<div class="spin"></div>';
-  S.busy=true; setStatus('Thinking...','thinking');
+  S.activeTurns++; updateComposerState(); setStatus('Thinking...','thinking');
   try{ await routeMessage(text); }
   catch(e){ addBubble('jordan','Something went wrong: '+e.message); }
-  S.busy=false; btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> Send'; setStatus('Crew ready','');
-  ['jordan','maya','kai','priya','leo'].forEach(a=>setAgent(a,'on'));
+  S.activeTurns=Math.max(0,S.activeTurns-1); updateComposerState();
+  if(S.activeTurns===0){ setStatus('Crew ready',''); ['jordan','maya','kai','priya','leo'].forEach(a=>setAgent(a,'on')); }
 }
 
 async function routeMessage(text){

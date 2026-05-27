@@ -14,6 +14,8 @@ Your autonomous AI build crew - chat, brainstorm, and ship apps with 5 AI agents
 4. Optionally set a password to protect the URL
 5. Start chatting with your crew
 
+You can update saved provider keys later from the **AI Keys** tab inside the app.
+
 ## Your Crew
 
 - **Jordan** - Product Manager. Writes specs, proposes ideas, runs brainstorms

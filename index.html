@@ -293,6 +293,9 @@
   .gh-con-btn { padding: 7px 14px; border-radius: var(--radius); border: none; background: var(--blue); color: white; font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; margin-top: 10px; }
   .gh-con-btn:hover { background: #0C447C; }
   .gh-stat { margin-top: 8px; padding: 8px 10px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); font-size: 12px; color: var(--text2); }
+  .key-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 9px; }
+  .key-status { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text3); margin-top: 4px; }
+  .key-status.saved { color: #27500A; }
   .commit-log { flex: 1; overflow-y: auto; }
   .commit-item { padding: 9px 14px; border-bottom: 0.5px solid var(--border); display: flex; gap: 9px; align-items: flex-start; }
   .c-sha { font-family: 'SF Mono', monospace; font-size: 10px; background: var(--bg2); padding: 2px 5px; border-radius: 3px; color: var(--text2); flex-shrink: 0; margin-top: 1px; }
@@ -381,6 +384,7 @@
     <div class="tab active" id="tab-chat" onclick="switchTab('chat')"><i class="ti ti-messages"></i> Chat</div>
     <div class="tab" id="tab-files" onclick="switchTab('files')"><i class="ti ti-files"></i> Files <span class="tbadge" id="files-badge">0</span></div>
     <div class="tab" id="tab-memory" onclick="switchTab('memory')"><i class="ti ti-brain"></i> Memory <span class="tbadge" id="mem-badge">0</span></div>
+    <div class="tab" id="tab-keys" onclick="switchTab('keys')"><i class="ti ti-key"></i> AI Keys</div>
     <div class="tab" id="tab-github" onclick="switchTab('github')"><i class="ti ti-brand-github"></i> GitHub <span class="tbadge" id="commits-badge">0</span></div>
   </div>
 
@@ -487,6 +491,34 @@
     </div>
   </div>
 
+  <!-- AI KEYS VIEW -->
+  <div class="view" id="view-keys">
+    <div class="gh-view">
+      <div class="gh-setup">
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px">AI provider keys</div>
+        <div class="key-grid">
+          <div class="gh-field">
+            <div class="gh-lbl">Anthropic API key</div>
+            <input class="gh-input" id="keys-anthropic" type="password" placeholder="sk-ant-api03-..." autocomplete="off" oninput="markKeysDirty()">
+            <div class="key-status" id="keys-anthropic-stat"><i class="ti ti-circle"></i> Not saved</div>
+          </div>
+          <div class="gh-field">
+            <div class="gh-lbl">Gemini AI Studio API key</div>
+            <input class="gh-input" id="keys-gemini" type="password" placeholder="AIza..." autocomplete="off" oninput="markKeysDirty()">
+            <div class="key-status" id="keys-gemini-stat"><i class="ti ti-circle"></i> Not saved</div>
+          </div>
+          <div class="gh-field">
+            <div class="gh-lbl">Groq API key</div>
+            <input class="gh-input" id="keys-groq" type="password" placeholder="gsk_..." autocomplete="off" oninput="markKeysDirty()">
+            <div class="key-status" id="keys-groq-stat"><i class="ti ti-circle"></i> Not saved</div>
+          </div>
+        </div>
+        <button class="gh-con-btn" onclick="saveProviderKeysFromSettings()"><i class="ti ti-device-floppy"></i> Save AI keys</button>
+        <div class="gh-stat" id="keys-stat">Anthropic is used first. Gemini and Groq are used as fallbacks.</div>
+      </div>
+    </div>
+  </div>
+
   <!-- GITHUB VIEW -->
   <div class="view" id="view-github">
     <div class="gh-view">
@@ -509,7 +541,6 @@
   </div>
 </div>
 
-<script src="./local-config.js"></script>
 <script>
 // ── LOCK / UNLOCK ─────────────────────────────────────────────────────────────
 const STORAGE_KEY_API  = 'vc_apikey';
@@ -569,6 +600,7 @@ function unlock(){
   setStoredKey(STORAGE_KEY_GEMINI, geminiKey);
   setStoredKey(STORAGE_KEY_GROQ, groqKey);
   setProviderKeys({anthropic:apiKey, gemini:geminiKey, groq:groqKey});
+  syncProviderKeyInputs();
 
   // Show app
   document.getElementById('lock-screen').style.display = 'none';
@@ -604,6 +636,7 @@ window.addEventListener('load', ()=>{
   document.getElementById('lock-apikey').value = storedKey || '';
   document.getElementById('lock-gemini-key').value = storedGeminiKey;
   document.getElementById('lock-groq-key').value = storedGroqKey;
+  syncProviderKeyInputs();
   if(hasAnyProviderKey() && !storedPass){
     document.getElementById('lock-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -634,6 +667,44 @@ function setProviderKeys(keys){
 }
 function hasAnyProviderKey(){ return !!(APP_PROVIDER_KEYS.anthropic || APP_PROVIDER_KEYS.gemini || APP_PROVIDER_KEYS.groq); }
 
+function providerKeyStatus(key){ return key ? '<i class="ti ti-check"></i> Saved' : '<i class="ti ti-circle"></i> Not saved'; }
+function setKeyStatus(id,key){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.className='key-status'+(key?' saved':'');
+  el.innerHTML=providerKeyStatus(key);
+}
+function syncProviderKeyInputs(){
+  const ids={anthropic:'keys-anthropic',gemini:'keys-gemini',groq:'keys-groq'};
+  Object.entries(ids).forEach(([provider,id])=>{
+    const input=document.getElementById(id);
+    if(input) input.value=APP_PROVIDER_KEYS[provider]||'';
+    setKeyStatus(id+'-stat',APP_PROVIDER_KEYS[provider]);
+  });
+}
+function markKeysDirty(){
+  const stat=document.getElementById('keys-stat');
+  if(stat) stat.textContent='Unsaved changes.';
+}
+function saveProviderKeysFromSettings(){
+  const anthropic=document.getElementById('keys-anthropic').value.trim();
+  const gemini=document.getElementById('keys-gemini').value.trim();
+  const groq=document.getElementById('keys-groq').value.trim();
+  const stat=document.getElementById('keys-stat');
+  if(!anthropic && !gemini && !groq){ stat.textContent='Enter at least one AI provider API key.'; return; }
+  if(anthropic && !anthropic.startsWith('sk-ant')){ stat.textContent='Anthropic keys should start with sk-ant.'; return; }
+  if(groq && !groq.startsWith('gsk_')){ stat.textContent='Groq keys should start with gsk_.'; return; }
+  setStoredKey(STORAGE_KEY_API,anthropic);
+  setStoredKey(STORAGE_KEY_GEMINI,gemini);
+  setStoredKey(STORAGE_KEY_GROQ,groq);
+  setProviderKeys({anthropic,gemini,groq});
+  document.getElementById('lock-apikey').value=anthropic;
+  document.getElementById('lock-gemini-key').value=gemini;
+  document.getElementById('lock-groq-key').value=groq;
+  syncProviderKeyInputs();
+  stat.innerHTML='<span style="color:#27500A">Saved. New requests will use the updated provider keys.</span>';
+}
+
 // ── APP STATE ────────────────────────────────────────────────────────────────
 const S = {
   busy: false,
@@ -654,7 +725,7 @@ const AGENTS = {
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function ts(){ return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
-function switchTab(t){ ['chat','files','memory','github'].forEach(v=>{ document.getElementById('view-'+v)?.classList.toggle('active',v===t); document.getElementById('tab-'+v)?.classList.toggle('active',v===t); }); }
+function switchTab(t){ ['chat','files','memory','keys','github'].forEach(v=>{ document.getElementById('view-'+v)?.classList.toggle('active',v===t); document.getElementById('tab-'+v)?.classList.toggle('active',v===t); }); if(t==='keys') syncProviderKeyInputs(); }
 function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(); } }
 function quickSend(t){ document.getElementById('chat-ta').value=t; handleSend(); }

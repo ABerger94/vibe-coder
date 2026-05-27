@@ -1027,7 +1027,7 @@ async function callGemini(sys,usr,max){
 }
 
 async function callGroq(sys,usr,max){
-  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+  const r=await fetch('/api/groq',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+APP_PROVIDER_KEYS.groq},
     body:JSON.stringify({

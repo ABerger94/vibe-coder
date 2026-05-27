@@ -1256,7 +1256,8 @@ function stripCodeFence(code){
 }
 function normalizePreviewCode(path,code,name){
   let out=stripCodeFence(code);
-  out=out.replace(/^\s*import\s+[^;\n]+;?\s*$/gm,'');
+  out=out.replace(/^\s*import\s+[\s\S]*?from\s*['"][^'"]+['"]\s*;?\s*/gm,'');
+  out=out.replace(/^\s*import\s*['"][^'"]+['"]\s*;?\s*/gm,'');
   out=out.replace(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/g,'function $1');
   out=out.replace(/export\s+default\s+function\s*\(/g,`function ${name}(`);
   out=out.replace(/export\s+default\s+class\s+([A-Za-z_$][\w$]*)/g,'class $1');
@@ -1269,6 +1270,9 @@ function normalizePreviewCode(path,code,name){
   return `// ${path}\n${out}\nif (typeof ${name} !== 'undefined') window.__previewComponents.push({name:${JSON.stringify(name)}, path:${JSON.stringify(path)}, component:${name}});`;
 }
 function scriptSafe(s){ return String(s||'').replace(/<\/script/gi,'<\\/script'); }
+function previewErrorDoc(message){
+  return `<!doctype html><html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"><div style="padding:18px;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(message)}</div></body></html>`;
+}
 function previewSourceDoc(){
   const paths=getPreviewFiles().sort((a,b)=>{
     const appA=/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(a), appB=/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(b);
@@ -1279,51 +1283,60 @@ function previewSourceDoc(){
   const appRoot=entries.find(e=>/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(e.path));
   const root=appRoot||entries[entries.length-1];
   const appCode=entries.map(e=>normalizePreviewCode(e.path,e.code,e.name)).join('\n\n');
+  if(!entries.length) return previewErrorDoc('No previewable React component files were generated yet.');
   return `<!doctype html>
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.tailwindcss.com"><\/script>
-<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#111827}.vc-preview-error{padding:18px;font-size:13px;line-height:1.6;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap}.vc-preview-empty{padding:32px;color:#6b7280;font-size:14px}</style>
+<script>window.__previewError=function(msg){var root=document.getElementById('root');if(root)root.innerHTML='<div class="vc-preview-error">'+String(msg).replace(/[&<>]/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[ch];})+'</div>';};window.onerror=function(msg,src,line,col,err){window.__previewError((err&&err.stack)||msg);};window.onunhandledrejection=function(e){window.__previewError((e.reason&&e.reason.stack)||e.reason||'Preview failed');};<\/script>
+<script src="https://cdn.tailwindcss.com" onerror="window.__previewError('Could not load Tailwind from cdn.tailwindcss.com')"><\/script>
+<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#111827}.vc-preview-error{padding:18px;font-size:13px;line-height:1.6;color:#991b1b;background:#fef2f2;min-height:100vh;white-space:pre-wrap}.vc-preview-empty{padding:32px;color:#6b7280;font-size:14px}.vc-preview-loading{padding:32px;color:#6b7280;font-size:14px}</style>
 </head>
 <body>
-<div id="root"></div>
-<script src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+<div id="root"><div class="vc-preview-loading">Loading preview...</div></div>
+<script src="https://unpkg.com/react@18/umd/react.development.js" onerror="window.__previewError('Could not load React from unpkg.com')"><\/script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" onerror="window.__previewError('Could not load ReactDOM from unpkg.com')"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" onerror="window.__previewError('Could not load Babel from unpkg.com')"><\/script>
 <script type="text/babel" data-presets="typescript,react">
-const {useState,useEffect,useMemo,useCallback,useRef,useReducer,useContext,createContext,Fragment}=React;
-var IconStub=({className='',...props}) => <span className={className} aria-hidden="true" style={{display:'inline-block',width:'1em',height:'1em',border:'1.5px solid currentColor',borderRadius:'999px',verticalAlign:'-0.125em'}} {...props}></span>;
-var Search=IconStub,Menu=IconStub,X=IconStub,Star=IconStub,Heart=IconStub,User=IconStub,Users=IconStub,Settings=IconStub,Plus=IconStub,Minus=IconStub,Trash=IconStub,Edit=IconStub,Save=IconStub,Download=IconStub,Upload=IconStub,ArrowRight=IconStub,ArrowLeft=IconStub,ChevronDown=IconStub,ChevronUp=IconStub,Check=IconStub,AlertCircle=IconStub,Info=IconStub,Home=IconStub,Calendar=IconStub,Clock=IconStub,Mail=IconStub,Phone=IconStub,MapPin=IconStub,Sparkles=IconStub,Zap=IconStub,Play=IconStub,Pause=IconStub,ShoppingCart=IconStub;
-var Button=({children,className='',...props}) => <button className={'inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white '+className} {...props}>{children}</button>;
-var Card=({children,className='',...props}) => <div className={'rounded-lg border border-slate-200 bg-white '+className} {...props}>{children}</div>;
-var CardHeader=({children,className='',...props}) => <div className={'p-4 '+className} {...props}>{children}</div>;
-var CardTitle=({children,className='',...props}) => <h3 className={'text-base font-semibold '+className} {...props}>{children}</h3>;
-var CardDescription=({children,className='',...props}) => <p className={'text-sm text-slate-500 '+className} {...props}>{children}</p>;
-var CardContent=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
-var CardFooter=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
-var Badge=({children,className='',...props}) => <span className={'inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 '+className} {...props}>{children}</span>;
-var Input=({className='',...props}) => <input className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
-var Textarea=({className='',...props}) => <textarea className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
-var Label=({children,className='',...props}) => <label className={'text-sm font-medium '+className} {...props}>{children}</label>;
+Object.assign(window,{useState:React.useState,useEffect:React.useEffect,useMemo:React.useMemo,useCallback:React.useCallback,useRef:React.useRef,useReducer:React.useReducer,useContext:React.useContext,createContext:React.createContext,Fragment:React.Fragment});
+window.IconStub=({className='',...props}) => <span className={className} aria-hidden="true" style={{display:'inline-block',width:'1em',height:'1em',border:'1.5px solid currentColor',borderRadius:'999px',verticalAlign:'-0.125em'}} {...props}></span>;
+['Search','Menu','X','Star','Heart','User','Users','Settings','Plus','Minus','Trash','Edit','Save','Download','Upload','ArrowRight','ArrowLeft','ChevronDown','ChevronUp','Check','AlertCircle','Info','Home','Calendar','Clock','Mail','Phone','MapPin','Sparkles','Zap','Play','Pause','ShoppingCart'].forEach(function(name){ window[name]=window.IconStub; });
+window.Button=({children,className='',...props}) => <button className={'inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white '+className} {...props}>{children}</button>;
+window.Card=({children,className='',...props}) => <div className={'rounded-lg border border-slate-200 bg-white '+className} {...props}>{children}</div>;
+window.CardHeader=({children,className='',...props}) => <div className={'p-4 '+className} {...props}>{children}</div>;
+window.CardTitle=({children,className='',...props}) => <h3 className={'text-base font-semibold '+className} {...props}>{children}</h3>;
+window.CardDescription=({children,className='',...props}) => <p className={'text-sm text-slate-500 '+className} {...props}>{children}</p>;
+window.CardContent=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
+window.CardFooter=({children,className='',...props}) => <div className={'p-4 pt-0 '+className} {...props}>{children}</div>;
+window.Badge=({children,className='',...props}) => <span className={'inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 '+className} {...props}>{children}</span>;
+window.Input=({className='',...props}) => <input className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
+window.Textarea=({className='',...props}) => <textarea className={'rounded-md border border-slate-300 px-3 py-2 text-sm '+className} {...props} />;
+window.Label=({children,className='',...props}) => <label className={'text-sm font-medium '+className} {...props}>{children}</label>;
 window.__previewComponents=[];
 try {
 ${scriptSafe(appCode)}
   const rootName=${JSON.stringify(root?.name||'')};
   const renderAll=${appRoot?'false':'true'};
   const selected=window.__previewComponents.find(c=>c.name===rootName)||window.__previewComponents[window.__previewComponents.length-1];
+  class PreviewBoundary extends React.Component {
+    constructor(props){ super(props); this.state={err:null}; }
+    static getDerivedStateFromError(err){ return {err}; }
+    componentDidCatch(err){ console.error(err); }
+    render(){ return this.state.err?<div className="vc-preview-error">Preview failed: {String(this.state.err && (this.state.err.stack||this.state.err.message) || this.state.err)}</div>:this.props.children; }
+  }
   function PreviewShell(){
     if(!selected) return <div className="vc-preview-empty">No previewable React component was generated yet.</div>;
     if(renderAll) return <div className="min-h-screen bg-slate-50 p-4 space-y-4">{window.__previewComponents.map(item=>{ const Item=item.component; return <section key={item.path} className="bg-white border border-slate-200 rounded-lg overflow-hidden"><div className="px-3 py-2 text-xs font-medium text-slate-500 border-b border-slate-200">{item.name}</div><Item /></section>; })}</div>;
     const Component=selected.component;
     return <Component />;
   }
-  ReactDOM.createRoot(document.getElementById('root')).render(<PreviewShell />);
+  ReactDOM.createRoot(document.getElementById('root')).render(<PreviewBoundary><PreviewShell /></PreviewBoundary>);
 } catch (err) {
-  document.getElementById('root').innerHTML='<div class="vc-preview-error">Preview failed: '+String(err && (err.stack||err.message) || err).replace(/[&<>]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[ch]))+'</div>';
+  window.__previewError('Preview failed: '+String(err && (err.stack||err.message) || err));
 }
 <\/script>
+<script>setTimeout(function(){var root=document.getElementById('root');if(root&&/Loading preview/.test(root.textContent||''))window.__previewError('Preview could not render. This usually means the generated code has syntax that the browser preview cannot compile. Open the component file and ask the crew to simplify or fix the preview error.');},5000);<\/script>
 </body>
 </html>`;
 }

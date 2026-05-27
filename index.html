@@ -1296,7 +1296,7 @@ function normalizePreviewCode(path,code,name){
   out=out.replace(/export\s+default\s+</g,`const ${name}=()=> <`);
   out=out.replace(/export\s+{[^}]+};?/g,'');
   out=out.replace(/export\s+(const|let|var|function|class)\s+/g,'$1 ');
-  return `// ${path}\n${out}\nif (typeof ${name} !== 'undefined') window.__previewComponents.push({name:${JSON.stringify(name)}, path:${JSON.stringify(path)}, component:${name}});`;
+  return `// ${path}\n${out}\nif (typeof ${name} !== 'undefined') { window[${JSON.stringify(name)}]=${name}; window.__previewComponents.push({name:${JSON.stringify(name)}, path:${JSON.stringify(path)}, component:${name}}); }`;
 }
 function scriptSafe(s){ return String(s||'').replace(/<\/script/gi,'<\\/script'); }
 function previewErrorDoc(message){
@@ -1311,7 +1311,7 @@ function previewSourceDoc(){
   const entries=paths.map(path=>({path, name:previewComponentName(path,S.files[path]?.content||''), code:S.files[path]?.content||''}));
   const appRoot=entries.find(e=>/(^|\/)App\.(jsx|tsx|js|ts)$/i.test(e.path));
   const root=appRoot||entries[entries.length-1];
-  const appCode=entries.map(e=>normalizePreviewCode(e.path,e.code,e.name)).join('\n\n');
+  const previewEntries=entries.map(e=>({path:e.path,name:e.name,code:normalizePreviewCode(e.path,e.code,e.name)}));
   if(!entries.length) return previewErrorDoc('No previewable React component files were generated yet.');
   return `<!doctype html>
 <html>
@@ -1327,8 +1327,10 @@ function previewSourceDoc(){
 <script src="https://unpkg.com/react@18/umd/react.development.js" onerror="window.__previewError('Could not load React from unpkg.com')"><\/script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" onerror="window.__previewError('Could not load ReactDOM from unpkg.com')"><\/script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js" onerror="window.__previewError('Could not load Babel from unpkg.com')"><\/script>
+<script id="preview-data" type="application/json">${scriptSafe(JSON.stringify(previewEntries))}<\/script>
 <script id="preview-source" type="text/plain">
 const {useState,useEffect,useMemo,useCallback,useRef,useReducer,useContext,createContext,Fragment}=React;
+Object.assign(window,{useState,useEffect,useMemo,useCallback,useRef,useReducer,useContext,createContext,Fragment});
 window.IconStub=({className='',...props}) => <span className={className} aria-hidden="true" style={{display:'inline-block',width:'1em',height:'1em',border:'1.5px solid currentColor',borderRadius:'999px',verticalAlign:'-0.125em'}} {...props}></span>;
 ['Search','Menu','X','Star','Heart','User','Users','Settings','Plus','Minus','Trash','Edit','Save','Download','Upload','ArrowRight','ArrowLeft','ChevronDown','ChevronUp','Check','AlertCircle','Info','Home','Calendar','Clock','Mail','Phone','MapPin','Sparkles','Zap','Play','Pause','ShoppingCart'].forEach(function(name){ window[name]=window.IconStub; });
 window.Button=({children,className='',...props}) => <button className={'inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white '+className} {...props}>{children}</button>;
@@ -1344,9 +1346,18 @@ window.Textarea=({className='',...props}) => <textarea className={'rounded-md bo
 window.Label=({children,className='',...props}) => <label className={'text-sm font-medium '+className} {...props}>{children}</label>;
 window.__previewComponents=[];
 try {
-${scriptSafe(appCode)}
   const rootName=${JSON.stringify(root?.name||'')};
   const renderAll=${appRoot?'false':'true'};
+  const compileErrors=[];
+  const previewEntries=JSON.parse(document.getElementById('preview-data').textContent||'[]');
+  previewEntries.forEach(function(entry){
+    try {
+      const compiled=Babel.transform(entry.code,{presets:['typescript','react'],filename:entry.path}).code;
+      new Function(compiled)();
+    } catch (err) {
+      compileErrors.push(entry.path+': '+String(err && (err.message||err) || 'Unknown compile error'));
+    }
+  });
   const selected=window.__previewComponents.find(c=>c.name===rootName)||window.__previewComponents[window.__previewComponents.length-1];
   class PreviewBoundary extends React.Component {
     constructor(props){ super(props); this.state={err:null}; }
@@ -1355,7 +1366,7 @@ ${scriptSafe(appCode)}
     render(){ return this.state.err?<div className="vc-preview-error">Preview failed: {String(this.state.err && (this.state.err.stack||this.state.err.message) || this.state.err)}</div>:this.props.children; }
   }
   function PreviewShell(){
-    if(!selected) return <div className="vc-preview-empty">No previewable React component was generated yet.</div>;
+    if(!selected) return <div className="vc-preview-error">{compileErrors.length?'Preview could not compile any component:\\n'+compileErrors.join('\\n\\n'):'No previewable React component was generated yet.'}</div>;
     if(renderAll) return <div className="min-h-screen bg-slate-50 p-4 space-y-4">{window.__previewComponents.map(item=>{ const Item=item.component; return <section key={item.path} className="bg-white border border-slate-200 rounded-lg overflow-hidden"><div className="px-3 py-2 text-xs font-medium text-slate-500 border-b border-slate-200">{item.name}</div><Item /></section>; })}</div>;
     const Component=selected.component;
     return <Component />;

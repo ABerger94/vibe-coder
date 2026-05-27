@@ -1707,25 +1707,14 @@ async function showPreview(){
   const pv=document.getElementById('preview-viewer');
   const frame=document.getElementById('preview-frame');
   pv.style.display='flex';
-  document.getElementById('preview-note').textContent=paths.length?`Starting real StackBlitz runtime for ${paths.length} component${paths.length===1?'':'s'}...`:'No previewable React files';
-  frame.innerHTML='<div class="vc-preview-loading">Starting StackBlitz preview...</div>';
+  document.getElementById('preview-note').textContent=paths.length?`Running local browser preview for ${paths.length} component${paths.length===1?'':'s'}`:'No previewable React files';
   if(!paths.length){ frame.innerHTML='<div class="vc-preview-error">No previewable React files were generated yet.</div>'; return; }
-  try{
-    const sdk=await ensureStackBlitzSDK();
-    STACKBLITZ_VM=await sdk.embedProject('preview-frame',makeStackBlitzProject(),{
-      openFile:'src/App.jsx',
-      terminalHeight:30,
-      view:'preview',
-      hideExplorer:false,
-      hideNavigation:false,
-      forceEmbedLayout:true,
-      clickToLoad:false
-    });
-    document.getElementById('preview-note').textContent='Running in StackBlitz WebContainers';
-  }catch(err){
-    frame.innerHTML=`<div class="vc-preview-error">${esc(err.message||'StackBlitz preview failed.')}</div>`;
-    document.getElementById('preview-note').textContent='Preview failed';
-  }
+  frame.innerHTML='';
+  const iframe=document.createElement('iframe');
+  iframe.title='Generated app preview';
+  iframe.sandbox='allow-scripts allow-forms allow-popups';
+  iframe.srcdoc=previewSourceDoc();
+  frame.appendChild(iframe);
 }
 async function openStackBlitzProject(){
   if(!getPreviewFiles().length) return;
